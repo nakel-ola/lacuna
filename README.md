@@ -11,6 +11,7 @@ A fast, native disk space analyzer for macOS, built with Rust and Tauri.
 ![macOS 10.15+](https://img.shields.io/badge/macOS-10.15%2B-0e0f0e?style=flat-square&logo=apple&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-scanner-0e0f0e?style=flat-square&logo=rust&logoColor=white)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-0e0f0e?style=flat-square&logo=tauri&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-0e0f0e?style=flat-square)
 ![React + TypeScript](https://img.shields.io/badge/React-TypeScript-0e0f0e?style=flat-square&logo=react&logoColor=white)
 
 <br />
@@ -136,3 +137,7 @@ pnpm test
 ```
 
 Keep changes focused, and match the style of the code around them.
+
+## License
+
+[MIT](LICENSE) © 2026 Nakel

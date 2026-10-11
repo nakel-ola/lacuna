@@ -3,6 +3,7 @@ name = "lacuna"
 version = "0.1.0"
 description = "Lacuna: disk space analyzer"
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "lacuna_lib"

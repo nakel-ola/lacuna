@@ -2,6 +2,7 @@
   "name": "lacuna",
   "private": true,
   "description": "Lacuna: see what fills your disk and clear it.",
+  "license": "MIT",
   "packageManager": "pnpm@10.2.0",
   "scripts": {
     "dev": "turbo run dev",
