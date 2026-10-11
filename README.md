@@ -18,6 +18,11 @@ A fast, native disk space analyzer for macOS, built with Rust and Tauri.
 
 <img src="docs/images/screenshot.png" width="860" alt="Lacuna showing space by folder, a storage overview and the contents of the startup disk" />
 
+
+
+https://github.com/user-attachments/assets/20a685ae-25af-4c58-ac7e-b9baf2ba31dc
+
+
 </div>
 
 <br />
