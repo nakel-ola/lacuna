@@ -1,4 +1,7 @@
 node_modules/
-src-tauri/target/
-src-tauri/gen/
+dist/
+.turbo/
+**/src-tauri/target/
+**/src-tauri/gen/
+*.tsbuildinfo
 .DS_Store

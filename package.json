@@ -1,15 +1,15 @@
 {
   "name": "lacuna",
-  "version": "0.1.0",
   "private": true,
-  "description": "Lacuna: see what fills your disk and clear it (Tauri desktop app).",
+  "description": "Lacuna: see what fills your disk and clear it.",
+  "packageManager": "pnpm@10.2.0",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "icon": "tauri icon app-icon.svg",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "turbo": "^2.11.7"
   }
 }
