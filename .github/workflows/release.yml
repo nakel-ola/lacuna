@@ -1,0 +1,108 @@
+# Builds Lacuna for macOS and publishes a GitHub Release when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag must match `version` in apps/desktop/src-tauri/tauri.conf.json.
+#
+# The app is a universal binary (Apple silicon + Intel). Every release also gets a copy named
+# `Lacuna.dmg`, which the website's /download page links to via releases/latest/download/Lacuna.dmg.
+#
+# Signing: without secrets the app is ad-hoc signed, so macOS asks users to allow it on first
+# launch. Add these repository secrets (Settings → Secrets and variables → Actions) to sign with a
+# Developer ID and notarize instead: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
+# APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific password), APPLE_TEAM_ID.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    env:
+      HAS_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      DMG_DIR: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg
+      RELEASE_BODY: |
+        Download **Lacuna.dmg** below, open it, and drag Lacuna to Applications.
+
+        Requires macOS 10.15 or later. One app for Apple silicon and Intel Macs.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the app version $version in tauri.conf.json"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build and publish (Developer ID signed + notarized)
+        if: env.HAS_SIGNING == 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          args: --target universal-apple-darwin --bundles app,dmg
+          tagName: ${{ github.ref_name }}
+          releaseName: Lacuna ${{ github.ref_name }}
+          releaseBody: ${{ env.RELEASE_BODY }}
+          releaseDraft: false
+          prerelease: false
+
+      - name: Build and publish (ad-hoc signed)
+        if: env.HAS_SIGNING != 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          args: --target universal-apple-darwin --bundles app,dmg
+          tagName: ${{ github.ref_name }}
+          releaseName: Lacuna ${{ github.ref_name }}
+          releaseBody: ${{ env.RELEASE_BODY }}
+          releaseDraft: false
+          prerelease: false
+
+      - name: Upload Lacuna.dmg for the website's download link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg=$(ls "$DMG_DIR"/*.dmg | head -n 1)
+          cp "$dmg" Lacuna.dmg
+          gh release upload "$GITHUB_REF_NAME" Lacuna.dmg --clobber

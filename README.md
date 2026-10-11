@@ -51,9 +51,16 @@ A fast, native disk space analyzer for macOS, built with Rust and Tauri.
 | <kbd>⌘</kbd><kbd>↑</kbd> | Up one folder |
 | <kbd>Esc</kbd> | Clear search / close menus |
 
-## Getting started
+## Download
 
-Lacuna isn't published as a download yet, so build it from source.
+Get the latest version from **[lacuna.nakel.app/download](https://lacuna.nakel.app/download/)**, or from
+[GitHub Releases](https://github.com/nakel-ola/lacuna/releases/latest). It's one app for Apple silicon and Intel Macs.
+
+1. Open `Lacuna.dmg` and drag Lacuna to **Applications**.
+2. Lacuna isn't notarized by Apple yet, so the first launch needs one extra step. If macOS says it can't verify the
+   developer, open **System Settings → Privacy & Security** and click **Open Anyway**.
+
+## Building from source
 
 **You'll need:** macOS 10.15 or later, [Rust](https://rustup.rs) (stable), [Node.js](https://nodejs.org) 22+ and [pnpm](https://pnpm.io) 10+.
 
@@ -129,11 +136,24 @@ The landing page is static HTML. Set the production domain and repository URL in
 
 ## Roadmap
 
-- [ ] Signed and notarized releases (DMG)
+- [x] Universal DMG releases built by GitHub Actions
+- [ ] Developer ID signing and notarization (needs an Apple Developer account)
 - [ ] Privileged helper to scan folders even Full Disk Access can't read
 - [ ] APFS snapshots and purgeable space
 - [ ] Quick Look previews
 - [ ] Windows and Linux (the scanner already falls back to `std::fs` off macOS)
+
+## Releasing
+
+Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` (and `Cargo.toml`), commit, then push a matching tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) builds a universal `Lacuna.app` and DMG and publishes the
+release. It also attaches a copy named `Lacuna.dmg`, which the website's download page always points to. Builds are
+ad-hoc signed until the Apple signing secrets listed at the top of the workflow are added to the repository.
 
 ## Contributing
 

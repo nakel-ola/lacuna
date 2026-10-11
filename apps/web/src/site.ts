@@ -11,4 +11,7 @@ export const SITE = {
   minimumMacOS: '10.15',
 };
 
-export const DOWNLOAD_URL = `${SITE.github}/releases/latest`;
+/** Our own download page: starts the download and shows install steps. */
+export const DOWNLOAD_URL = '/download/';
+/** The latest release's DMG. The release workflow always uploads it under this name. */
+export const DOWNLOAD_FILE = `${SITE.github}/releases/latest/download/Lacuna.dmg`;

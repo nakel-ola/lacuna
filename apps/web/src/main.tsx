@@ -1,12 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
-import { App } from './App';
+import { App, routeFor } from './App';
 import './styles/global.css';
 
 const root = document.getElementById('root')!;
 const app = (
   <StrictMode>
-    <App />
+    <App route={routeFor(location.pathname)} />
   </StrictMode>
 );
 

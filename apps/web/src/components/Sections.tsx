@@ -14,13 +14,13 @@ export function Nav() {
         <nav aria-label="Main">
           <ul className="nav-links">
             <li>
-              <a href="#features">Features</a>
+              <a href="/#features">Features</a>
             </li>
             <li>
-              <a href="#how-it-works">How it works</a>
+              <a href="/#how-it-works">How it works</a>
             </li>
             <li>
-              <a href="#faq">FAQ</a>
+              <a href="/#faq">FAQ</a>
             </li>
             <li>
               <a href={SITE.github} rel="noopener">
@@ -95,8 +95,8 @@ export function OpenSource() {
           <p className="eyebrow">Open source</p>
           <h2 id="oss-title">Built in the open. Yours to read, fork and improve.</h2>
           <p>
-            Lacuna is MIT licensed. The scanner is Rust, the interface is React and TypeScript, and the app is a 6.6 MB Tauri
-            bundle. No black boxes: you can read exactly what it does with your files.
+            Lacuna is MIT licensed. The scanner is Rust, the interface is React and TypeScript, and the app is a 6.6 MB
+            Tauri bundle. No black boxes: you can read exactly what it does with your files.
           </p>
           <ul className="checks">
             <li>
@@ -126,7 +126,12 @@ export function OpenSource() {
               <i />
             </span>
             <span>Terminal</span>
-            <button className={`copy${copied ? ' copied' : ''}`} type="button" aria-label="Copy commands" onClick={copy}>
+            <button
+              className={`copy${copied ? ' copied' : ''}`}
+              type="button"
+              aria-label="Copy commands"
+              onClick={copy}
+            >
               <Icon name={copied ? 'check' : 'copy'} size={15} />
             </button>
           </div>
@@ -173,27 +178,29 @@ export function Faq() {
   );
 }
 
-export function Footer() {
+export function Footer({ cta = true }: { cta?: boolean }) {
   return (
     <>
-      <section className="cta" aria-labelledby="cta-title">
-        <div className="container">
-          <div className="cta-panel">
-            <h2 id="cta-title">Get your space back.</h2>
-            <p>Free, private and open source. Your first scan takes about a minute.</p>
-            <div className="hero-actions">
-              <a className="btn btn-paper btn-lg" href={DOWNLOAD_URL}>
-                <Icon name="apple" size={20} />
-                Download for Mac
-              </a>
-              <a className="btn btn-ghost-inv btn-lg" href={SITE.github} rel="noopener">
-                <Icon name="github" size={18} />
-                View source
-              </a>
+      {cta && (
+        <section className="cta" aria-labelledby="cta-title">
+          <div className="container">
+            <div className="cta-panel">
+              <h2 id="cta-title">Get your space back.</h2>
+              <p>Free, private and open source. Your first scan takes about a minute.</p>
+              <div className="hero-actions">
+                <a className="btn btn-paper btn-lg" href={DOWNLOAD_URL}>
+                  <Icon name="apple" size={20} />
+                  Download for Mac
+                </a>
+                <a className="btn btn-ghost-inv btn-lg" href={SITE.github} rel="noopener">
+                  <Icon name="github" size={18} />
+                  View source
+                </a>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <footer className="footer">
         <div className="container footer-inner">
