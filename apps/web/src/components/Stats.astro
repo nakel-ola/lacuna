@@ -1,0 +1,16 @@
+---
+import { STATS } from '../content';
+---
+
+<section class="stats" aria-label="Lacuna in numbers">
+  <dl class="container stats-row">
+    {
+      STATS.map((s) => (
+        <div class="stat">
+          <dt>{s.label}</dt>
+          <dd>{s.value}</dd>
+        </div>
+      ))
+    }
+  </dl>
+</section>

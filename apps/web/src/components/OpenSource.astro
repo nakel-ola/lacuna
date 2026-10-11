@@ -1,0 +1,62 @@
+---
+import { SITE } from '../site';
+import Icon from './Icon.astro';
+
+const repoPath = new URL(SITE.github).pathname.slice(1);
+---
+
+<section class="section" id="open-source" aria-labelledby="oss-title">
+  <div class="container oss">
+    <div class="oss-copy">
+      <p class="eyebrow">Open source</p>
+      <h2 id="oss-title">Built in the open. Yours to read, fork and improve.</h2>
+      <p>
+        Lacuna is MIT licensed. The scanner is Rust, the interface is React and TypeScript, and the app is a 6.6 MB Tauri
+        bundle. No black boxes: you can read exactly what it does with your files.
+      </p>
+      <ul class="checks">
+        <li><Icon name="check" size={16} />Rust scanner using <code>getattrlistbulk</code> and 16 threads</li>
+        <li><Icon name="check" size={16} />Sizes match <code>du</code>; hard links counted once</li>
+        <li><Icon name="check" size={16} />Deletion re-checked in Rust before anything moves</li>
+      </ul>
+      <a class="btn btn-ink" href={SITE.github} rel="noopener">
+        <Icon name="github" size={18} />
+        Star on GitHub
+      </a>
+    </div>
+
+    <div class="terminal" role="region" aria-label="Build Lacuna from source">
+      <div class="terminal-bar">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Terminal</span>
+        <button class="copy" type="button" data-copy aria-label="Copy commands">
+          <Icon name="copy" size={15} />
+        </button>
+      </div>
+      <pre><code><span class="c"># build Lacuna from source</span>
+<span class="p">$</span> git clone https://github.com/{repoPath}.git
+<span class="p">$</span> cd lacuna && pnpm install
+<span class="p">$</span> pnpm build
+<span class="ok">✓</span> Lacuna.app <span class="c">(6.6 MB)</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Copy the shell commands (without prompts or output) to the clipboard.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    button.addEventListener('click', async () => {
+      const code = button.closest('.terminal')?.querySelector('code')?.innerText ?? '';
+      const commands = code
+        .split('\n')
+        .filter((line) => line.startsWith('$ '))
+        .map((line) => line.slice(2))
+        .join('\n');
+      try {
+        await navigator.clipboard.writeText(commands);
+        button.classList.add('copied');
+        setTimeout(() => button.classList.remove('copied'), 1500);
+      } catch {}
+    });
+  }
+</script>

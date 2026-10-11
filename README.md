@@ -107,21 +107,29 @@ On the startup disk Lacuna scans `/System/Volumes/Data`. Since macOS 10.15, `/` 
 ```
 .
 ├── apps/
-│   └── desktop/              # the Lacuna app
-│       ├── src/              # React + TypeScript UI
-│       ├── src-tauri/        # Rust core and Tauri config
-│       └── app-icon.svg      # icon source (pnpm --filter @lacuna/desktop icon)
+│   ├── desktop/              # the Lacuna app
+│   │   ├── src/              # React + TypeScript UI
+│   │   ├── src-tauri/        # Rust core and Tauri config
+│   │   └── app-icon.svg      # icon source (pnpm --filter @lacuna/desktop icon)
+│   └── web/                  # landing page (Astro, static)
 ├── docs/                     # design notes and images
 ├── turbo.json                # Turborepo tasks: dev, build, test, typecheck
 └── pnpm-workspace.yaml
 ```
 
-It's a [Turborepo](https://turborepo.com) monorepo, so the landing page can live next to the app in `apps/web`.
+It's a [Turborepo](https://turborepo.com) monorepo. Run one app at a time with a filter:
+
+```bash
+pnpm --filter @lacuna/desktop dev   # the app
+pnpm --filter @lacuna/web dev       # the landing page at http://localhost:4321
+```
+
+The landing page is static HTML. Set the production domain and repository URL in
+[`apps/web/src/site.ts`](apps/web/src/site.ts) before deploying.
 
 ## Roadmap
 
 - [ ] Signed and notarized releases (DMG)
-- [ ] Landing page (`apps/web`)
 - [ ] Privileged helper to scan folders even Full Disk Access can't read
 - [ ] APFS snapshots and purgeable space
 - [ ] Quick Look previews

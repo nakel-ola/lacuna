@@ -1,0 +1,36 @@
+---
+const STEPS = [
+  {
+    title: 'Pick a disk',
+    body: 'Choose your startup disk, an external drive, or any folder. You can also drop a folder onto the window.',
+  },
+  {
+    title: 'See where it went',
+    body: 'Charts and tables fill in live while the scan runs. Drill into folders, filter, sort, search.',
+  },
+  {
+    title: 'Clear it safely',
+    body: 'Collect what you no longer need, review the exact list, and move it to the Trash in one click.',
+  },
+];
+---
+
+<section class="section" id="how-it-works" aria-labelledby="how-title">
+  <div class="container">
+    <header class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2 id="how-title">Three steps. About a minute.</h2>
+    </header>
+    <ol class="steps">
+      {
+        STEPS.map((s, i) => (
+          <li class="step">
+            <span class="step-num">{String(i + 1).padStart(2, '0')}</span>
+            <h3>{s.title}</h3>
+            <p>{s.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

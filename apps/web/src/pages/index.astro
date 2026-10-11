@@ -1,0 +1,55 @@
+---
+import Faq from '../components/Faq.astro';
+import Features from '../components/Features.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import Nav from '../components/Nav.astro';
+import OpenSource from '../components/OpenSource.astro';
+import Stats from '../components/Stats.astro';
+import Steps from '../components/Steps.astro';
+import { FAQ } from '../content';
+import Base from '../layouts/Base.astro';
+import { DOWNLOAD_URL, SITE } from '../site';
+
+const site = Astro.site!;
+const schema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: SITE.name,
+    description: SITE.description,
+    url: site.href,
+    image: new URL('/og.png', site).href,
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: `macOS ${SITE.minimumMacOS} or later`,
+    softwareVersion: SITE.version,
+    downloadUrl: DOWNLOAD_URL,
+    license: 'https://opensource.org/licenses/MIT',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    codeRepository: SITE.github,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  },
+];
+---
+
+<Base schema={schema}>
+  <Nav />
+  <main id="main">
+    <Hero />
+    <Stats />
+    <Features />
+    <Steps />
+    <OpenSource />
+    <Faq />
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,101 @@
+---
+import { getImage } from 'astro:assets';
+import appDark from '../assets/app-dark.png';
+import appLight from '../assets/app-light.png';
+import { DOWNLOAD_URL, SITE } from '../site';
+import Icon from './Icon.astro';
+
+// Responsive AVIF/WebP for both themes; the window follows the visitor's light/dark setting.
+const WIDTHS = [800, 1280, 1920, 2560];
+async function srcset(src: ImageMetadata, format: 'avif' | 'webp') {
+  const images = await Promise.all(WIDTHS.map((width) => getImage({ src, width, format })));
+  return images.map((img, i) => `${img.src} ${WIDTHS[i]}w`).join(', ');
+}
+const [darkAvif, darkWebp, lightAvif, lightWebp] = await Promise.all([
+  srcset(appDark, 'avif'),
+  srcset(appDark, 'webp'),
+  srcset(appLight, 'avif'),
+  srcset(appLight, 'webp'),
+]);
+const fallback = await getImage({ src: appLight, width: 1920, format: 'jpg', quality: 82 });
+const sizes = '(min-width: 1240px) 1100px, 92vw';
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="container">
+    <a class="announce" href={SITE.github} rel="noopener">
+      <span class="announce-tag">
+        <Icon name="star" size={13} />
+        Open source
+      </span>
+      <span class="announce-extra">Free forever. </span>Star Lacuna on <b>GitHub</b>
+      <span class="announce-arrow"><Icon name="arrow" size={14} /></span>
+    </a>
+
+    <h1 id="hero-title">See what's filling<br /> your Mac.</h1>
+    <p class="lede">
+      Lacuna scans millions of files in seconds, shows you exactly where your storage went, and moves what you
+      don't need to the Trash. Free, private, open source.
+    </p>
+
+    <div class="hero-actions">
+      <a class="btn btn-ink btn-lg" href={DOWNLOAD_URL}>
+        <Icon name="apple" size={20} />
+        Download for Mac
+      </a>
+      <a class="btn btn-line btn-lg" href={SITE.github} rel="noopener">
+        <Icon name="github" size={18} />
+        View source
+      </a>
+    </div>
+    <p class="fine">macOS {SITE.minimumMacOS} or later · MIT license</p>
+  </div>
+
+  <div class="container showcase-wrap">
+    <div class="showcase">
+      <div class="wallpaper" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+        <span class="blob blob-c"></span>
+      </div>
+
+      <figure class="window">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <picture>
+          <source media="(prefers-color-scheme: dark)" type="image/avif" srcset={darkAvif} sizes={sizes} />
+          <source media="(prefers-color-scheme: dark)" type="image/webp" srcset={darkWebp} sizes={sizes} />
+          <source type="image/avif" srcset={lightAvif} sizes={sizes} />
+          <source type="image/webp" srcset={lightWebp} sizes={sizes} />
+          <img
+            src={fallback.src}
+            width={appLight.width}
+            height={appLight.height}
+            alt="Lacuna's Overview: a bar chart of space by folder, a storage overview by file type, and a table of folders with two marked for cleanup."
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+          />
+        </picture>
+      </figure>
+
+      <!-- Floating fragments of the real UI, like menus hovering over a desktop. -->
+      <div class="float float-menu" aria-hidden="true">
+        <div class="float-label">Disks</div>
+        <div class="float-item">
+          <span class="float-icon"><Icon name="disk" size={15} /></span>
+          <span class="float-text"><b>Macintosh HD</b><small>212 GB free · 995 GB</small><i class="cap"><i style="width:79%"></i></i></span>
+          <Icon name="check" size={15} />
+        </div>
+        <div class="float-item">
+          <span class="float-icon"><Icon name="disk" size={15} /></span>
+          <span class="float-text"><b>Backup SSD</b><small>1.4 TB free · 2.0 TB</small><i class="cap"><i style="width:30%"></i></i></span>
+        </div>
+      </div>
+
+      <div class="float float-trash" aria-hidden="true">
+        <span class="trash-icon"><Icon name="trash" size={18} /></span>
+        <span><b>390 GB</b> moved to the Trash<small>2 items · recoverable</small></span>
+      </div>
+    </div>
+  </div>
+</section>

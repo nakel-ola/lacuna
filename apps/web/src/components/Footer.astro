@@ -1,0 +1,41 @@
+---
+import { DOWNLOAD_URL, SITE } from '../site';
+import Icon from './Icon.astro';
+import Logo from './Logo.astro';
+
+const year = new Date().getFullYear();
+---
+
+<section class="cta" aria-labelledby="cta-title">
+  <div class="container">
+    <div class="cta-panel">
+      <h2 id="cta-title">Get your space back.</h2>
+      <p>Free, private and open source. Your first scan takes about a minute.</p>
+      <div class="hero-actions">
+        <a class="btn btn-paper btn-lg" href={DOWNLOAD_URL}>
+          <Icon name="apple" size={20} />
+          Download for Mac
+        </a>
+        <a class="btn btn-ghost-inv btn-lg" href={SITE.github} rel="noopener">
+          <Icon name="github" size={18} />
+          View source
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <a class="brand" href="/" aria-label="Lacuna home">
+      <Logo size={18} />
+      <span>Lacuna</span>
+    </a>
+    <p>© {year} Lacuna contributors · <a href={`${SITE.github}/blob/main/LICENSE`} rel="noopener">MIT license</a></p>
+    <ul>
+      <li><a href={SITE.github} rel="noopener">GitHub</a></li>
+      <li><a href={`${SITE.github}/releases`} rel="noopener">Releases</a></li>
+      <li><a href={`${SITE.github}/issues`} rel="noopener">Report an issue</a></li>
+    </ul>
+  </div>
+</footer>
