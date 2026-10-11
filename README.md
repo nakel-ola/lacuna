@@ -111,7 +111,7 @@ On the startup disk Lacuna scans `/System/Volumes/Data`. Since macOS 10.15, `/` 
 │   │   ├── src/              # React + TypeScript UI
 │   │   ├── src-tauri/        # Rust core and Tauri config
 │   │   └── app-icon.svg      # icon source (pnpm --filter @lacuna/desktop icon)
-│   └── web/                  # landing page (Astro, static)
+│   └── web/                  # landing page (Vite + React, prerendered to static HTML)
 ├── docs/                     # design notes and images
 ├── turbo.json                # Turborepo tasks: dev, build, test, typecheck
 └── pnpm-workspace.yaml

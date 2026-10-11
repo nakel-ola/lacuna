@@ -33,3 +33,18 @@ export const FAQ = [
     a: 'Any Mac running macOS 10.15 Catalina or later. Windows and Linux are on the roadmap.',
   },
 ];
+
+export const STEPS = [
+  {
+    title: 'Pick a disk',
+    body: 'Choose your startup disk, an external drive, or any folder. You can also drop a folder onto the window.',
+  },
+  {
+    title: 'See where it went',
+    body: 'Charts and tables fill in live while the scan runs. Drill into folders, filter, sort, search.',
+  },
+  {
+    title: 'Clear it safely',
+    body: 'Collect what you no longer need, review the exact list, and move it to the Trash in one click.',
+  },
+];
