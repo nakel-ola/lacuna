@@ -1,8 +1,8 @@
-// Everything the site links to, in one place. Set `url` to the production domain before
-// deploying: canonical links, the sitemap and social cards are built from it.
+// Everything the site links to, in one place. `url` is the production domain:
+// canonical links, the sitemap and social cards are built from it.
 export const SITE = {
   name: 'Lacuna',
-  url: 'https://lacuna.example.com',
+  url: 'https://lacuna.nakel.app',
   github: 'https://github.com/nakel-ola/lacuna',
   title: 'Lacuna: free, open-source disk space analyzer for Mac',
   description:
