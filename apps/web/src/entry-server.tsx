@@ -33,6 +33,14 @@ export function renderHead(route: Route): string {
   const canonical = new URL(route, SITE.url).href;
   const ogImage = new URL('/og.png', SITE.url).href;
   const schema = [
+    // Tells Google the site's name ("Lacuna") for the name shown above search results.
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: SITE.name,
+      alternateName: ['Lacuna for Mac', 'Lacuna disk space analyzer'],
+      url: new URL('/', SITE.url).href,
+    },
     {
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
