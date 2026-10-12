@@ -32,8 +32,8 @@ export function Hero() {
           <br /> your Mac.
         </h1>
         <p className="lede">
-          Lacuna scans millions of files in seconds, shows you exactly where your storage went, and moves what you don't
-          need to the Trash. Free, private, open source.
+          Lacuna is a free, open-source disk space analyzer for Mac. It scans millions of files in seconds, shows you
+          exactly what’s taking up space, and moves what you don’t need to the Trash.
         </p>
 
         <div className="hero-actions">

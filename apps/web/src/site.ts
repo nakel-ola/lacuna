@@ -11,6 +11,17 @@ export const SITE = {
   minimumMacOS: '10.15',
 };
 
+/** The 30-second promo, hosted on the site and on YouTube. */
+export const VIDEO = {
+  file: '/video/lacuna-promo.mp4',
+  poster: '/video/lacuna-promo-poster.jpg',
+  youtube: 'https://youtu.be/i05RICUVkk4',
+  uploadDate: '2026-10-11',
+  duration: 'PT30S',
+};
+
+export const AUTHOR = { name: 'Olamilekan Nunu', url: 'https://github.com/nakel-ola' };
+
 /** Our own download page: starts the download and shows install steps. */
 export const DOWNLOAD_URL = '/download/';
 /** The latest release's DMG. The release workflow always uploads it under this name. */

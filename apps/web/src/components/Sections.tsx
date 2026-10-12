@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FAQ, STATS, STEPS } from '../content';
-import { DOWNLOAD_URL, SITE } from '../site';
+import { DOWNLOAD_URL, SITE, VIDEO } from '../site';
 import { Icon, Logo } from './Icon';
 
 export function Nav() {
@@ -21,6 +21,9 @@ export function Nav() {
             </li>
             <li>
               <a href="/#faq">FAQ</a>
+            </li>
+            <li>
+              <a href="/guides/free-up-space-on-mac/">Guide</a>
             </li>
             <li>
               <a href={SITE.github} rel="noopener">
@@ -71,6 +74,32 @@ export function Steps() {
             </li>
           ))}
         </ol>
+      </div>
+    </section>
+  );
+}
+
+export function Demo() {
+  return (
+    <section className="section demo" id="demo" aria-labelledby="demo-title">
+      <div className="container">
+        <header className="section-head">
+          <p className="eyebrow">See it in action</p>
+          <h2 id="demo-title">From “disk almost full” to free space in 30 seconds.</h2>
+        </header>
+        <video
+          className="demo-video"
+          controls
+          muted
+          playsInline
+          preload="none"
+          poster="/video/lacuna-promo-poster.jpg"
+          width={1920}
+          height={1080}
+        >
+          <source src="/video/lacuna-promo.mp4" type="video/mp4" />
+          <a href={VIDEO.youtube}>Watch the Lacuna demo on YouTube</a>
+        </video>
       </div>
     </section>
   );
@@ -215,6 +244,9 @@ export function Footer({ cta = true }: { cta?: boolean }) {
             </a>
           </p>
           <ul>
+            <li>
+              <a href="/guides/free-up-space-on-mac/">Free up space on a Mac</a>
+            </li>
             <li>
               <a href={SITE.github} rel="noopener">
                 GitHub
