@@ -16,7 +16,7 @@ export const VIDEO = {
   file: '/video/lacuna-promo.mp4',
   poster: '/video/lacuna-promo-poster.jpg',
   youtube: 'https://youtu.be/i05RICUVkk4',
-  uploadDate: '2026-10-11',
+  uploadDate: '2026-10-11T00:00:00+00:00',
   duration: 'PT30S',
 };
 
