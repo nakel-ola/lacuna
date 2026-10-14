@@ -10,7 +10,8 @@ export const CATEGORY_SHADES = ['var(--g0)', 'var(--g1)', 'var(--g2)', 'var(--g3
 
 export function Hero() {
   const folder = useStore((s) => s.folder);
-  const { navigate, goUp, reveal } = useStore.getState();
+  const chart = useStore((s) => s.chart);
+  const { navigate, goUp, reveal, setChart, exportCsv } = useStore.getState();
   const chain = folder?.ancestors ?? [];
 
   return (
@@ -31,6 +32,17 @@ export function Hero() {
             </nav>
           </div>
           <div className="icon-btns">
+            <button
+              className="icon-btn"
+              type="button"
+              title={chart === 'bars' ? 'Show as a map' : 'Show as bars'}
+              onClick={() => setChart(chart === 'bars' ? 'map' : 'bars')}
+            >
+              <Icon name={chart === 'bars' ? 'map' : 'bars'} />
+            </button>
+            <button className="icon-btn" type="button" title="Export this folder to CSV" onClick={exportCsv}>
+              <Icon name="download" />
+            </button>
             <button className="icon-btn" type="button" title="Up one level (⌘↑)" disabled={chain.length < 2} onClick={goUp}>
               <Icon name="up" />
             </button>
@@ -39,7 +51,7 @@ export function Hero() {
             </button>
           </div>
         </div>
-        <SpaceBars />
+        {chart === 'map' ? <SpaceMap /> : <SpaceBars />}
       </div>
       <div className="panel">
         <StorageOverview />
@@ -64,6 +76,7 @@ function barItems(kids: ViewNode[]): ViewNode[] {
       kind: 'other',
       size: rest.reduce((a, c) => a + c.size, 0),
       count: rest.reduce((a, c) => a + c.count, 0),
+      time: 0,
     },
   ];
 }
@@ -167,6 +180,149 @@ function SpaceBars() {
   return (
     <div className="bars" ref={ref}>
       <svg viewBox={`0 0 ${W || 1} ${H || 1}`} role="img" aria-label="Space by folder">
+        {chart}
+      </svg>
+    </div>
+  );
+}
+
+// ---- Space by folder (treemap) ----
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Squarified treemap: rects for `sizes` (largest first), in the same order. */
+function squarify(sizes: number[], area: Rect): Rect[] {
+  const total = sizes.reduce((a, v) => a + v, 0);
+  if (!total || area.w <= 0 || area.h <= 0) return sizes.map(() => ({ x: area.x, y: area.y, w: 0, h: 0 }));
+  const scale = (area.w * area.h) / total;
+  const areas = sizes.map((v) => v * scale);
+  const worst = (row: number[], side: number) => {
+    const sum = row.reduce((a, v) => a + v, 0);
+    const max = Math.max(...row);
+    const min = Math.min(...row);
+    return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
+  };
+  const out: Rect[] = [];
+  let { x, y, w, h } = area;
+  let i = 0;
+  while (i < areas.length) {
+    const side = Math.min(w, h);
+    const row = [areas[i]];
+    let j = i + 1;
+    while (j < areas.length && worst([...row, areas[j]], side) <= worst(row, side)) row.push(areas[j++]);
+    const sum = row.reduce((a, v) => a + v, 0);
+    if (w >= h) {
+      const cw = sum / h;
+      let yy = y;
+      for (const a of row) {
+        out.push({ x, y: yy, w: cw, h: a / cw });
+        yy += a / cw;
+      }
+      x += cw;
+      w -= cw;
+    } else {
+      const rh = sum / w;
+      let xx = x;
+      for (const a of row) {
+        out.push({ x: xx, y, w: a / rh, h: rh });
+        xx += a / rh;
+      }
+      y += rh;
+      h -= rh;
+    }
+    i = j;
+  }
+  return out;
+}
+
+const fits = (text: string, w: number) => truncate(text, Math.max(1, Math.floor((w - 10) / 6.6)));
+
+function SpaceMap() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { width: W, height: H } = useSize(ref);
+  const folder = useStore((s) => s.folder);
+  const hot = useStore((s) => s.hot);
+  const scanning = useStore((s) => s.summary?.status === 'scanning');
+  const { setHot, navigate, showTip, moveTip, hideTip, quickLook } = useStore.getState();
+  const items = useMemo(() => (folder?.tree.children ?? []).filter((c) => c.size > 0), [folder]);
+
+  const hover = (item: ViewNode) => ({
+    onMouseEnter: (e: React.MouseEvent) => {
+      setHot(item.id);
+      showTip(`${item.name} — ${formatBytes(item.size)}`, e.clientX, e.clientY);
+    },
+    onMouseMove: (e: React.MouseEvent) => moveTip(e.clientX, e.clientY),
+    onMouseLeave: () => {
+      setHot(null);
+      hideTip();
+    },
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (item.kind === 'dir') navigate(item.id);
+      else if (item.kind === 'file' && item.id != null) quickLook(item.id);
+    },
+  });
+
+  let chart = null;
+  if (W && H && !items.length) {
+    chart = (
+      <text x={W / 2} y={H / 2} textAnchor="middle" className="axis-label">
+        {scanning ? 'Scanning…' : 'This folder is empty'}
+      </text>
+    );
+  } else if (W && H) {
+    const rects = squarify(
+      items.map((i) => i.size),
+      { x: 0, y: 0, w: W, h: H },
+    );
+    chart = items.map((item, i) => {
+      const r = rects[i];
+      const isHot = item.id != null && item.id === hot;
+      const kids = (item.children ?? []).filter((c) => c.size > 0);
+      const nested = item.kind === 'dir' && kids.length > 1 && r.w > 70 && r.h > 54;
+      const inner = nested ? squarify(kids.map((k) => k.size), { x: r.x + 4, y: r.y + 22, w: r.w - 8, h: r.h - 26 }) : [];
+      return (
+        <g key={item.id ?? `more-${i}`} className={`map-tile${isHot ? ' hot' : ''}${item.kind === 'other' ? ' rest' : ''}`}>
+          <rect x={r.x + 1} y={r.y + 1} width={Math.max(0, r.w - 2)} height={Math.max(0, r.h - 2)} rx={6} className="map-box" {...hover(item)} />
+          {r.w > 44 && r.h > 20 && (
+            <text x={r.x + 8} y={r.y + 15} className="map-label">
+              {fits(`${item.name} · ${formatBytes(item.size)}`, r.w)}
+            </text>
+          )}
+          {inner.map((ir, j) => {
+            const kid = kids[j];
+            return (
+              <g key={kid.id ?? `k-${j}`}>
+                <rect
+                  x={ir.x + 1}
+                  y={ir.y + 1}
+                  width={Math.max(0, ir.w - 2)}
+                  height={Math.max(0, ir.h - 2)}
+                  rx={4}
+                  className={`map-inner${kid.kind === 'dir' ? '' : ' leaf'}`}
+                  {...hover(kid)}
+                />
+                {ir.w > 56 && ir.h > 22 && (
+                  <text x={ir.x + 7} y={ir.y + 15} className="map-inner-label">
+                    {fits(kid.name, ir.w)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      );
+    });
+  }
+
+  return (
+    <div className="bars" ref={ref}>
+      <svg viewBox={`0 0 ${W || 1} ${H || 1}`} role="img" aria-label="Space by folder, as a map">
         {chart}
       </svg>
     </div>

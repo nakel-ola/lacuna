@@ -1,9 +1,35 @@
 import { create } from 'zustand';
 import { api } from './lib/api';
-import type { Collected, FolderView, Hit, Item, Summary, TrashResult, TypeTotal, Volume } from './lib/types';
+import type {
+  Changes,
+  Collected,
+  DuplicateGroup,
+  FolderView,
+  HiddenSpace,
+  Hit,
+  Item,
+  SnapshotInfo,
+  Suggestion,
+  Summary,
+  TrashResult,
+  TypeTotal,
+  Volume,
+} from './lib/types';
 
-export type Tab = 'overview' | 'large' | 'types' | 'cleanup' | 'disks';
+export type Tab = 'overview' | 'large' | 'types' | 'suggestions' | 'duplicates' | 'changes' | 'hidden' | 'cleanup' | 'disks';
 export type Filter = 'all' | 'dirs' | 'files' | 'large';
+/** Large files: biggest overall, or biggest untouched for 1 or 2 years. */
+export type LargeMode = 'largest' | 'year' | 'twoYears';
+export type Chart = 'bars' | 'map';
+
+const CHART_KEY = 'lacuna-chart';
+const storedChart = (): Chart => {
+  try {
+    return localStorage.getItem(CHART_KEY) === 'map' ? 'map' : 'bars';
+  } catch {
+    return 'bars';
+  }
+};
 
 interface State {
   tab: Tab;
@@ -16,6 +42,14 @@ interface State {
   folder: FolderView | null;
   types: TypeTotal[];
   large: Hit[];
+  largeMode: LargeMode;
+  chart: Chart;
+  suggestions: Suggestion[] | null;
+  /** Duplicate search for the folder `scope`; null until started. */
+  duplicates: { scope: number | null; busy: boolean; groups: DuplicateGroup[]; done: number; total: number } | null;
+  changes: Changes | null;
+  snapshots: SnapshotInfo[];
+  hidden: HiddenSpace | null;
   /** Search hits, or null when not searching. */
   results: Hit[] | null;
   query: string;
@@ -45,6 +79,20 @@ interface State {
   navigate(id: number | null): void;
   goUp(): void;
   loadLarge(): Promise<void>;
+  setLargeMode(mode: LargeMode): void;
+  setChart(chart: Chart): void;
+  loadTab(): void;
+  loadSuggestions(): Promise<void>;
+  findDuplicates(): Promise<void>;
+  cancelDuplicates(): void;
+  onDuplicatesProgress(done: number, total: number): void;
+  loadChanges(): Promise<void>;
+  setBaseline(snapshot: string | null): Promise<void>;
+  clearHistory(): Promise<void>;
+  loadHidden(): Promise<void>;
+  quickLook(id?: number | null): void;
+  exportCsv(): Promise<void>;
+  collectMany(items: Item[]): void;
   setQuery(query: string): void;
   clearSearch(): void;
   setFilter(filter: Filter): void;
@@ -63,6 +111,7 @@ interface State {
   moveTip(x: number, y: number): void;
   hideTip(): void;
   showError(err: unknown): void;
+  notify(message: string): void;
 }
 
 let liveTimer: ReturnType<typeof setInterval> | undefined;
@@ -80,6 +129,13 @@ export const useStore = create<State>()((set, get) => ({
   folder: null,
   types: [],
   large: [],
+  largeMode: 'largest',
+  chart: storedChart(),
+  suggestions: null,
+  duplicates: null,
+  changes: null,
+  snapshots: [],
+  hidden: null,
   results: null,
   query: '',
   filter: 'all',
@@ -101,7 +157,7 @@ export const useStore = create<State>()((set, get) => ({
     set({ tab });
     if (tab !== 'overview' && s.results) get().clearSearch();
     if (tab === 'disks') get().loadVolumes();
-    if (tab === 'large') get().loadLarge();
+    else get().loadTab();
   },
 
   async loadVolumes() {
@@ -127,7 +183,22 @@ export const useStore = create<State>()((set, get) => ({
   async startScan(path, label) {
     try {
       const summary = await api.startScan(path, label);
-      set({ viewId: null, folder: null, types: [], large: [], results: null, query: '', collector: new Map(), pinnedBar: 0, hot: null });
+      set({
+        viewId: null,
+        folder: null,
+        types: [],
+        large: [],
+        suggestions: null,
+        duplicates: null,
+        changes: null,
+        snapshots: [],
+        hidden: null,
+        results: null,
+        query: '',
+        collector: new Map(),
+        pinnedBar: 0,
+        hot: null,
+      });
       get().onSummary(summary);
       get().setTab('overview');
     } catch (err) {
@@ -165,7 +236,8 @@ export const useStore = create<State>()((set, get) => ({
     const id = get().viewId;
     const req = ++folderReq;
     try {
-      const folder = await api.getTree(id, 1);
+      // The treemap draws two levels; the bars only need one.
+      const folder = await api.getTree(id, get().chart === 'map' ? 2 : 1);
       if (req !== folderReq) return;
       set({ folder });
     } catch {
@@ -178,12 +250,14 @@ export const useStore = create<State>()((set, get) => ({
       try {
         set({ types: await api.typeBreakdown(id) });
       } catch {}
-      if (get().tab === 'large') get().loadLarge();
+      get().loadTab();
     }
   },
 
   navigate(id) {
-    set({ viewId: id, pinnedBar: 0, hot: null });
+    // Duplicates are slow to find, so they're searched again only on request.
+    if (get().duplicates?.busy) api.cancelDuplicates().catch(() => {});
+    set({ viewId: id, pinnedBar: 0, hot: null, duplicates: null });
     get().refresh(true);
   },
 
@@ -193,10 +267,118 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   async loadLarge() {
+    const { viewId, largeMode } = get();
     try {
-      set({ large: await api.largestFiles(get().viewId, 200) });
+      const large =
+        largeMode === 'largest' ? await api.largestFiles(viewId, 200) : await api.untouchedItems(viewId, largeMode === 'year' ? 365 : 730, 200);
+      if (get().largeMode === largeMode && get().viewId === viewId) set({ large });
     } catch {
       set({ large: [] });
+    }
+  },
+
+  setLargeMode(largeMode) {
+    set({ largeMode, large: [] });
+    get().loadLarge();
+  },
+
+  setChart(chart) {
+    set({ chart });
+    try {
+      localStorage.setItem(CHART_KEY, chart);
+    } catch {}
+    get().refresh(false);
+  },
+
+  /** Loads what the current tab shows, for the current folder. */
+  loadTab() {
+    const tab = get().tab;
+    if (tab === 'large') get().loadLarge();
+    else if (tab === 'suggestions') get().loadSuggestions();
+    else if (tab === 'changes') get().loadChanges();
+    else if (tab === 'hidden') get().loadHidden();
+  },
+
+  async loadSuggestions() {
+    const viewId = get().viewId;
+    try {
+      const suggestions = await api.suggestions(viewId);
+      if (get().viewId === viewId) set({ suggestions });
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  async findDuplicates() {
+    const scope = get().viewId;
+    set({ duplicates: { scope, busy: true, groups: [], done: 0, total: 0 } });
+    try {
+      const groups = await api.findDuplicates(scope);
+      const current = get().duplicates;
+      // A stopped search returns nothing; leave the start screen up instead.
+      if (current?.scope === scope && current.busy) set({ duplicates: { ...current, busy: false, groups } });
+    } catch (err) {
+      set({ duplicates: null });
+      get().showError(err);
+    }
+  },
+
+  cancelDuplicates() {
+    set({ duplicates: null });
+    api.cancelDuplicates().catch(get().showError);
+  },
+
+  onDuplicatesProgress(done, total) {
+    const current = get().duplicates;
+    if (current?.busy) set({ duplicates: { ...current, done, total } });
+  },
+
+  async loadChanges() {
+    const viewId = get().viewId;
+    try {
+      const [changes, snapshots] = await Promise.all([api.getChanges(viewId), api.listSnapshots()]);
+      if (get().viewId === viewId) set({ changes, snapshots });
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  async setBaseline(snapshot) {
+    try {
+      set({ summary: await api.setBaseline(snapshot) });
+      get().refresh(true);
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  async clearHistory() {
+    try {
+      set({ summary: await api.clearHistory(), changes: null, snapshots: [] });
+      get().refresh(true);
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  async loadHidden() {
+    try {
+      set({ hidden: await api.hiddenSpace() });
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  quickLook(id) {
+    api.quickLook(id === undefined ? get().hot : id).catch(get().showError);
+  },
+
+  async exportCsv() {
+    try {
+      const path = await api.exportCsv(get().viewId);
+      if (path) get().notify(`Exported to ${path}`);
+    } catch (err) {
+      get().showError(err);
     }
   },
 
@@ -257,6 +439,15 @@ export const useStore = create<State>()((set, get) => ({
     set({ collector });
   },
 
+  collectMany(items) {
+    const collector = new Map(get().collector);
+    for (const item of items) {
+      if (item.id == null) continue;
+      collector.set(item.id, { id: item.id, name: item.name, size: item.size, kind: item.kind, location: item.location ?? '.' });
+    }
+    set({ collector });
+  },
+
   setDragging: (dragging) => set({ dragging }),
   setDropActive: (dropActive) => {
     if (get().dropActive !== dropActive) set({ dropActive });
@@ -307,7 +498,10 @@ export const useStore = create<State>()((set, get) => ({
   hideTip: () => set({ tip: null }),
 
   showError(err) {
-    const message = String((err as Error)?.message ?? err);
+    get().notify(String((err as Error)?.message ?? err));
+  },
+
+  notify(message) {
     set({ toast: message });
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => set({ toast: null }), 6000);

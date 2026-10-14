@@ -41,3 +41,25 @@ export function describeError(code: string): string {
 }
 
 export const usedPct = (total: number, free: number) => `${(((total - free) / total) * 100).toFixed(1)}%`;
+
+/** "+1.2 GB" / "−300 MB"; empty for no change. */
+export function formatDelta(n: number): string {
+  if (!n) return '';
+  return `${n > 0 ? '+' : '−'}${formatBytes(Math.abs(n))}`;
+}
+
+/** "3 days ago", "8 months ago", "2 years ago" for Unix seconds. */
+export function formatAge(secs: number): string {
+  if (!secs) return '—';
+  const days = Math.floor((Date.now() / 1000 - secs) / 86400);
+  if (days < 1) return 'Today';
+  if (days < 2) return 'Yesterday';
+  if (days < 45) return `${days} days ago`;
+  const months = Math.round(days / 30.4);
+  if (months < 18) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.floor(days / 365);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+export const formatDate = (secs: number) =>
+  new Date(secs * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });

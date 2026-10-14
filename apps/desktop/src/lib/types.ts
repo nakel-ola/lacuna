@@ -34,6 +34,8 @@ export interface Summary {
   stats: Stats;
   space: Space | null;
   elapsedMs: number;
+  /** Earlier scan being compared against, if any. */
+  baseline: SnapshotInfo | null;
 }
 
 export interface ViewNode {
@@ -43,6 +45,10 @@ export interface ViewNode {
   kind: Kind;
   size: number;
   count: number;
+  /** Newest change or access below this item (Unix seconds, 0 if unknown). */
+  time: number;
+  /** Size change since the compared scan. */
+  delta?: number;
   error?: string;
   children?: ViewNode[];
   hasChildren?: boolean;
@@ -68,6 +74,7 @@ export interface Hit {
   kind: Kind;
   size: number;
   count: number;
+  time: number;
 }
 
 export interface TypeTotal {
@@ -81,6 +88,69 @@ export interface TrashResult {
   total: number;
   trashed: number[];
   failed: string[];
+}
+
+export interface Suggestion {
+  id: string;
+  label: string;
+  why: string;
+  risk: 'safe' | 'review';
+  command?: string;
+  size: number;
+  items: Hit[];
+}
+
+export interface DuplicateGroup {
+  size: number;
+  copies: number;
+  reclaimable: number;
+  items: Hit[];
+}
+
+export interface VolumeUse {
+  name: string;
+  role: string;
+  used: number;
+  scanned: boolean;
+}
+
+export interface HiddenSpace {
+  wholeVolume: boolean;
+  total: number;
+  free: number;
+  purgeable: number | null;
+  volumes: VolumeUse[];
+  volumeUsed: number | null;
+  scanned: number;
+  unreadable: number;
+  unaccounted: number;
+  snapshots: string[];
+}
+
+export interface SnapshotInfo {
+  id: string;
+  root: string;
+  label: string;
+  /** Unix seconds. */
+  taken: number;
+  bytes: number;
+  files: number;
+}
+
+export interface Change {
+  id: number | null;
+  name: string;
+  location: string;
+  kind: Kind;
+  before: number;
+  after: number;
+}
+
+export interface Changes {
+  baseline: SnapshotInfo;
+  before: number;
+  after: number;
+  hotspots: Change[];
 }
 
 /** Anything that can appear as a table row. */

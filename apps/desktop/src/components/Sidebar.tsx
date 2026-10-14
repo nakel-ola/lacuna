@@ -42,8 +42,12 @@ function Tiles() {
     <nav className="tiles" aria-label="Views">
       {tile('overview', 'grid', 'Overview', 'tile-hero')}
       <div className="tile-grid">
+        {tile('suggestions', 'spark', 'Suggestions')}
         {tile('large', 'file', 'Large files')}
+        {tile('duplicates', 'copy', 'Duplicates')}
+        {tile('changes', 'history', 'Changes')}
         {tile('types', 'layers', 'File types')}
+        {tile('hidden', 'eye', 'Hidden space')}
         {tile('cleanup', 'trash', 'Cleanup')}
         {tile('disks', 'disk', 'Disks')}
       </div>

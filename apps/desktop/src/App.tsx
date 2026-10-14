@@ -39,6 +39,17 @@ export function App() {
       listen<Summary>('scan-done', ({ payload }) => {
         if (payload.scanId === useStore.getState().summary?.scanId) useStore.getState().onSummary(payload);
       }),
+      listen<[number, number]>('duplicates-progress', ({ payload }) => useStore.getState().onDuplicatesProgress(...payload)),
+      // "Scan Startup Disk" in the menu bar item.
+      listen('scan-startup-disk', async () => {
+        const { startScan, showError } = useStore.getState();
+        try {
+          const boot = (await api.listVolumes()).find((v) => v.isBoot);
+          if (boot) startScan(boot.scanPath, boot.name);
+        } catch (err) {
+          showError(err);
+        }
+      }),
     ];
     return () => unlisten.forEach((p) => p.then((off) => off()));
   }, []);
@@ -58,8 +69,14 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey) return;
       const s = useStore.getState();
+      // Space previews the hovered row with Quick Look, like Finder.
+      if (e.key === ' ' && !e.metaKey && s.summary && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)) {
+        e.preventDefault();
+        s.quickLook();
+        return;
+      }
+      if (!e.metaKey) return;
       const key = e.key.toLowerCase();
       if (key === 'o') {
         e.preventDefault();
