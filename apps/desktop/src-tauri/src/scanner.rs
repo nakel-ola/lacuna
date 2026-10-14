@@ -33,6 +33,8 @@ pub struct Node {
     pub size: u64,
     /// Files at or below this node.
     pub files: u64,
+    /// Newest modification/access time at or below this node (Unix seconds).
+    pub time: u32,
     pub children: Vec<u32>,
     pub error: i32,
     pub removed: bool,
@@ -63,6 +65,7 @@ impl Tree {
             kind: Kind::Dir,
             size: 0,
             files: 0,
+            time: 0,
             children: Vec::new(),
             error: 0,
             removed: false,
@@ -132,6 +135,19 @@ impl Tree {
         }
         self.stats.bytes = self.stats.bytes.wrapping_add_signed(bytes);
         self.stats.files = self.stats.files.wrapping_add_signed(files);
+    }
+
+    /// Raise the newest-time of `from` and its ancestors to at least `time`.
+    fn roll_up_time(&mut self, from: u32, time: u32) {
+        let mut cur = from;
+        while cur != NO_PARENT {
+            let n = &mut self.nodes[cur as usize];
+            if n.time >= time {
+                break;
+            }
+            n.time = time;
+            cur = n.parent;
+        }
     }
 
     /// Detach a node that was deleted on disk and subtract it from its
@@ -258,12 +274,18 @@ impl Scanner {
         let mut subdirs = Vec::new();
         let mut bytes = 0u64;
         let mut files = 0u64;
+        let mut newest = 0u32;
         for e in entries {
             if e.error != 0 {
                 tree.stats.errors += 1;
                 continue;
             }
             let child_id = tree.nodes.len() as u32;
+            // A folder's own time only says an entry was added or removed; its
+            // contents roll their times up as they're scanned.
+            if e.kind != TYPE_DIR {
+                newest = newest.max(e.time);
+            }
             let (kind, size, error) = match e.kind {
                 TYPE_DIR if e.dev != self.root_dev && !self.cross_devices => (Kind::Mount, 0, OTHER_VOLUME),
                 TYPE_DIR => {
@@ -285,6 +307,7 @@ impl Scanner {
                 kind,
                 size,
                 files: u64::from(!matches!(kind, Kind::Dir | Kind::Mount)),
+                time: if kind == Kind::Dir { 0 } else { e.time },
                 children: Vec::new(),
                 error,
                 removed: false,
@@ -295,12 +318,13 @@ impl Scanner {
         tree.stats.dirs += 1;
         tree.stats.current = path.to_string_lossy().into_owned();
         tree.roll_up(id, bytes as i64, files as i64);
+        tree.roll_up_time(id, newest);
         subdirs
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::fs;
 
@@ -374,6 +398,31 @@ mod tests {
         let t = s.tree();
         assert_eq!(t.nodes[find(&t, "locked") as usize].error, libc::EACCES);
         assert_eq!(t.stats.errors, 1);
+    }
+
+    /// Sets a file's access and modification time to `secs`.
+    pub(crate) fn set_time(p: &Path, secs: i64) {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(p.as_os_str().as_bytes()).unwrap();
+        let tv = [libc::timeval { tv_sec: secs, tv_usec: 0 }; 2];
+        assert_eq!(unsafe { libc::lutimes(c.as_ptr(), tv.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn newest_times_roll_up_to_folders() {
+        let dir = fixture();
+        let r = dir.path();
+        for f in ["big/a.bin", "big/nested/b.bin", "small/c.txt", "shared.bin", "loop"] {
+            set_time(&r.join(f), 1_000_000_000);
+        }
+        set_time(&r.join("big/nested/b.bin"), 1_500_000_000);
+        let s = scan(r);
+        let t = s.tree();
+        assert_eq!(t.nodes[find(&t, "big/a.bin") as usize].time, 1_000_000_000);
+        assert_eq!(t.nodes[find(&t, "big") as usize].time, 1_500_000_000);
+        assert_eq!(t.nodes[find(&t, "big/nested") as usize].time, 1_500_000_000);
+        // Sizes still parse correctly alongside the new attributes.
+        assert_eq!(t.nodes[find(&t, "big/a.bin") as usize].size, alloc(&t.root_path.join("big/a.bin")));
     }
 
     #[test]

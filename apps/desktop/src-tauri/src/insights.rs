@@ -1,4 +1,4 @@
-//! Whole-subtree queries for the Large files, File types and Search views.
+//! Whole-subtree queries for the Large files, Untouched, File types and Search views.
 
 use crate::scanner::{Kind, Tree, NO_PARENT};
 use serde::Serialize;
@@ -15,6 +15,8 @@ pub struct Hit {
     pub kind: &'static str,
     pub size: u64,
     pub count: u64,
+    /// Newest change or access below this item (Unix seconds, 0 if unknown).
+    pub time: u32,
 }
 
 #[derive(Serialize, Clone)]
@@ -132,6 +134,72 @@ pub fn search(tree: &Tree, id: u32, query: &str, limit: usize) -> Vec<Hit> {
     })
 }
 
+/// The largest files and folders below `id` that nothing has changed or
+/// opened since `before` (Unix seconds). Folders are reported whole, not
+/// their contents, and anything with unreadable contents is left out since
+/// its age can't be known.
+pub fn untouched(tree: &Tree, id: u32, before: u32, limit: usize) -> Vec<Hit> {
+    // Over-fetch: Finder's "last opened" date can still rule some out.
+    let mut heap: BinaryHeap<Reverse<(u64, u32)>> = BinaryHeap::with_capacity(limit * 2 + 1);
+    let mut stack = vec![id];
+    while let Some(n) = stack.pop() {
+        for &c in &tree.nodes[n as usize].children {
+            let child = &tree.nodes[c as usize];
+            if child.error != 0 || child.kind == Kind::Mount {
+                continue;
+            }
+            let old = child.time != 0 && child.time < before && child.size > 0;
+            if old && (child.kind != Kind::Dir || fully_readable(tree, c)) {
+                heap.push(Reverse((child.size, c)));
+                if heap.len() > limit * 2 {
+                    heap.pop();
+                }
+            } else if child.kind == Kind::Dir {
+                stack.push(c);
+            }
+        }
+    }
+    let mut ids: Vec<u32> = heap.into_iter().map(|Reverse((_, c))| c).collect();
+    ids.sort_by(|&a, &b| tree.nodes[b as usize].size.cmp(&tree.nodes[a as usize].size));
+    ids.retain(|&c| last_opened(&tree.path_of(c)).is_none_or(|t| t < before));
+    ids.truncate(limit);
+    hits(tree, id, ids)
+}
+
+fn fully_readable(tree: &Tree, id: u32) -> bool {
+    let mut stack = vec![id];
+    while let Some(n) = stack.pop() {
+        let node = &tree.nodes[n as usize];
+        if node.error != 0 && node.kind != Kind::Mount {
+            return false;
+        }
+        stack.extend(node.children.iter().copied().filter(|&c| tree.nodes[c as usize].kind == Kind::Dir));
+    }
+    true
+}
+
+/// When Finder/Launch Services last opened `path`, from the
+/// `com.apple.lastuseddate#PS` attribute (a `struct timespec`).
+#[cfg(target_os = "macos")]
+pub fn last_opened(path: &std::path::Path) -> Option<u32> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut buf = [0u8; 16];
+    let n = unsafe {
+        libc::getxattr(c.as_ptr(), c"com.apple.lastuseddate#PS".as_ptr(), buf.as_mut_ptr().cast(), buf.len(), 0, libc::XATTR_NOFOLLOW)
+    };
+    if n < 8 {
+        return None;
+    }
+    let secs = i64::from_le_bytes(buf[..8].try_into().ok()?);
+    Some(secs.clamp(0, u32::MAX as i64) as u32)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn last_opened(_path: &std::path::Path) -> Option<u32> {
+    None
+}
+
 fn top_by_size(tree: &Tree, id: u32, limit: usize, keep: impl Fn(&crate::scanner::Node) -> bool) -> Vec<Hit> {
     let mut heap: BinaryHeap<Reverse<(u64, u32)>> = BinaryHeap::with_capacity(limit + 1);
     let mut stack = vec![id];
@@ -149,12 +217,18 @@ fn top_by_size(tree: &Tree, id: u32, limit: usize, keep: impl Fn(&crate::scanner
             }
         }
     }
-    let base = tree.path_of(id);
-    let mut hits: Vec<Hit> = heap
-        .into_iter()
-        .map(|Reverse((_, c))| {
+    let mut hits = hits(tree, id, heap.into_iter().map(|Reverse((_, c))| c).collect());
+    hits.sort_by(|a, b| b.size.cmp(&a.size));
+    hits
+}
+
+/// Rows for `ids`, with locations relative to the folder `base_id`.
+pub fn hits(tree: &Tree, base_id: u32, ids: Vec<u32>) -> Vec<Hit> {
+    let base = tree.path_of(base_id);
+    ids.into_iter()
+        .map(|c| {
             let node = &tree.nodes[c as usize];
-            let parent = if node.parent == NO_PARENT { id } else { node.parent };
+            let parent = if node.parent == NO_PARENT { base_id } else { node.parent };
             let location = tree.path_of(parent);
             let rel = location.strip_prefix(&base).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
             Hit {
@@ -164,16 +238,37 @@ fn top_by_size(tree: &Tree, id: u32, limit: usize, keep: impl Fn(&crate::scanner
                 kind: if node.kind == Kind::Dir { "dir" } else { "file" },
                 size: node.size,
                 count: node.files,
+                time: node.time,
             }
         })
-        .collect();
-    hits.sort_by(|a, b| b.size.cmp(&a.size));
-    hits
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn untouched_reports_whole_old_folders_and_skips_recent_ones() {
+        use crate::scanner::{tests::set_time, Scanner};
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let r = dir.path();
+        fs::create_dir_all(r.join("old/inner")).unwrap();
+        fs::create_dir(r.join("mixed")).unwrap();
+        fs::write(r.join("old/a.bin"), vec![1u8; 10_000]).unwrap();
+        fs::write(r.join("old/inner/b.bin"), vec![1u8; 10_000]).unwrap();
+        fs::write(r.join("mixed/stale.bin"), vec![1u8; 30_000]).unwrap();
+        fs::write(r.join("mixed/fresh.bin"), vec![1u8; 10_000]).unwrap();
+        for f in ["old/a.bin", "old/inner/b.bin", "mixed/stale.bin"] {
+            set_time(&r.join(f), 1_000_000_000);
+        }
+        let s = Scanner::new(r, false).unwrap();
+        s.run(2);
+        let t = s.tree();
+        let names: Vec<String> = untouched(&t, 0, 1_200_000_000, 10).into_iter().map(|h| h.name).collect();
+        assert_eq!(names, ["stale.bin", "old"]);
+    }
 
     #[test]
     fn categories() {

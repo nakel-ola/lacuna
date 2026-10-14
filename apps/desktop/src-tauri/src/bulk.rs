@@ -20,6 +20,8 @@ pub struct Entry {
     pub nlink: u32,
     /// Bytes allocated on disk (what deleting it frees), not logical length.
     pub alloc: u64,
+    /// Newest of modification and access time, in Unix seconds.
+    pub time: u32,
     pub error: i32,
 }
 
@@ -33,6 +35,8 @@ pub fn read_dir(path: &Path, mut f: impl FnMut(Entry)) -> Result<(), i32> {
     const ATTR_CMN_NAME: u32 = 0x0000_0001;
     const ATTR_CMN_DEVID: u32 = 0x0000_0002;
     const ATTR_CMN_OBJTYPE: u32 = 0x0000_0008;
+    const ATTR_CMN_MODTIME: u32 = 0x0000_0400;
+    const ATTR_CMN_ACCTIME: u32 = 0x0000_1000;
     const ATTR_CMN_FILEID: u32 = 0x0200_0000;
     const ATTR_CMN_ERROR: u32 = 0x2000_0000;
     const ATTR_CMN_RETURNED_ATTRS: u32 = 0x8000_0000;
@@ -72,7 +76,14 @@ pub fn read_dir(path: &Path, mut f: impl FnMut(Entry)) -> Result<(), i32> {
     let mut list = AttrList {
         bitmapcount: 5, // ATTR_BIT_MAP_COUNT
         reserved: 0,
-        commonattr: ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME | ATTR_CMN_DEVID | ATTR_CMN_OBJTYPE | ATTR_CMN_FILEID,
+        commonattr: ATTR_CMN_RETURNED_ATTRS
+            | ATTR_CMN_ERROR
+            | ATTR_CMN_NAME
+            | ATTR_CMN_DEVID
+            | ATTR_CMN_OBJTYPE
+            | ATTR_CMN_MODTIME
+            | ATTR_CMN_ACCTIME
+            | ATTR_CMN_FILEID,
         volattr: 0,
         dirattr: 0,
         fileattr: ATTR_FILE_LINKCOUNT | ATTR_FILE_ALLOCSIZE,
@@ -109,6 +120,10 @@ pub fn read_dir(path: &Path, mut f: impl FnMut(Entry)) -> Result<(), i32> {
                 p += 4;
                 let kind = read::<u32>(rec, p);
                 p += 4;
+                let mtime = read::<i64>(rec, p); // struct timespec { tv_sec, tv_nsec }
+                p += 16;
+                let atime = read::<i64>(rec, p);
+                p += 16;
                 let ino = read::<u64>(rec, p);
                 p += 8;
                 let nlink = read::<u32>(rec, p);
@@ -124,6 +139,7 @@ pub fn read_dir(path: &Path, mut f: impl FnMut(Entry)) -> Result<(), i32> {
                     ino,
                     nlink,
                     alloc: alloc.max(0) as u64,
+                    time: unix_secs(mtime.max(atime)),
                     error: error as i32,
                 });
                 offset += len;
@@ -148,18 +164,28 @@ pub fn read_dir(path: &Path, mut f: impl FnMut(Entry)) -> Result<(), i32> {
                 let ft = md.file_type();
                 let kind = if ft.is_dir() { TYPE_DIR } else if ft.is_symlink() { TYPE_SYMLINK } else { TYPE_FILE };
                 #[cfg(unix)]
-                let (dev, ino, nlink, alloc) = {
+                let (dev, ino, nlink, alloc, time) = {
                     use std::os::unix::fs::MetadataExt;
-                    (md.dev(), md.ino(), md.nlink() as u32, md.blocks() * 512)
+                    (md.dev(), md.ino(), md.nlink() as u32, md.blocks() * 512, unix_secs(md.mtime().max(md.atime())))
                 };
                 #[cfg(not(unix))]
-                let (dev, ino, nlink, alloc) = (0, 0, 1, md.len());
-                f(Entry { name, kind, dev, ino, nlink, alloc, error: 0 });
+                let (dev, ino, nlink, alloc, time) = {
+                    let secs = |t: std::io::Result<std::time::SystemTime>| {
+                        t.ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64)
+                    };
+                    (0, 0, 1, md.len(), unix_secs(secs(md.modified()).max(secs(md.accessed()))))
+                };
+                f(Entry { name, kind, dev, ino, nlink, alloc, time, error: 0 });
             }
-            Err(e) => f(Entry { name, kind: 0, dev: 0, ino: 0, nlink: 0, alloc: 0, error: e.raw_os_error().unwrap_or(libc::EIO) }),
+            Err(e) => f(Entry { name, kind: 0, dev: 0, ino: 0, nlink: 0, alloc: 0, time: 0, error: e.raw_os_error().unwrap_or(libc::EIO) }),
         }
     }
     Ok(())
+}
+
+/// Seconds since 1970 in a u32 (good until 2106), clamped.
+fn unix_secs(t: i64) -> u32 {
+    t.clamp(0, u32::MAX as i64) as u32
 }
 
 fn last_errno() -> i32 {
