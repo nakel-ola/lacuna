@@ -1,5 +1,6 @@
 //! Depth-limited slices of the tree for the UI.
 
+use crate::history::Snapshot;
 use crate::scanner::{Kind, Tree, OTHER_VOLUME};
 use serde::Serialize;
 
@@ -17,6 +18,11 @@ pub struct ViewNode {
     pub kind: &'static str,
     pub size: u64,
     pub count: u64,
+    /// Newest change or access below this item (Unix seconds, 0 if unknown).
+    pub time: u32,
+    /// Size change since the compared scan, when there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delta: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -25,12 +31,12 @@ pub struct ViewNode {
     pub has_children: bool,
 }
 
-pub fn view(tree: &Tree, id: u32, depth: u32) -> ViewNode {
+pub fn view(tree: &Tree, id: u32, depth: u32, baseline: Option<&Snapshot>) -> ViewNode {
     let min = (tree.nodes[id as usize].size as f64 * MIN_FRACTION) as u64;
-    build(tree, id, depth, min)
+    build(tree, id, depth, min, baseline)
 }
 
-fn build(tree: &Tree, id: u32, depth: u32, min: u64) -> ViewNode {
+fn build(tree: &Tree, id: u32, depth: u32, min: u64, baseline: Option<&Snapshot>) -> ViewNode {
     let n = &tree.nodes[id as usize];
     let mut out = ViewNode {
         id: Some(id),
@@ -42,6 +48,8 @@ fn build(tree: &Tree, id: u32, depth: u32, min: u64) -> ViewNode {
         },
         size: n.size,
         count: n.files,
+        time: n.time,
+        delta: baseline.and_then(|b| b.delta(tree, id)),
         error: error_name(n.error),
         children: None,
         has_children: false,
@@ -60,7 +68,7 @@ fn build(tree: &Tree, id: u32, depth: u32, min: u64) -> ViewNode {
     for c in kids {
         let child = &tree.nodes[c as usize];
         if child.size >= min && child.size > 0 {
-            children.push(build(tree, c, depth - 1, min));
+            children.push(build(tree, c, depth - 1, min, baseline));
         } else {
             rest_size += child.size;
             rest_count += child.files;
@@ -74,6 +82,8 @@ fn build(tree: &Tree, id: u32, depth: u32, min: u64) -> ViewNode {
             kind: "other",
             size: rest_size,
             count: rest_count,
+            time: 0,
+            delta: None,
             error: None,
             children: None,
             has_children: false,
