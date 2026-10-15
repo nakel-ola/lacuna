@@ -1,10 +1,9 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../lib/api';
 import { describeError, formatAge, formatBytes, formatCount, formatDate, formatDelta, formatPct, kindLabel } from '../lib/format';
 import type { Collected, Item, Repo, Suggestion, Worktree } from '../lib/types';
 import { collectedTotal, useStore, type Filter, type LargeMode } from '../store';
-import { useSize } from '../lib/hooks';
 import { CATEGORY_SHADES } from './Hero';
 import { Icon } from './Icon';
 
@@ -599,86 +598,76 @@ function DuplicatesList() {
 
 // ---- Changes ----
 
-const shortDate = (secs: number) => new Date(secs * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const shortDate = (secs: number) =>
+  new Date(secs * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-/** The explored folder's size across saved scans, ending with this scan. */
+/** Most scans shown as bars; older ones still count in the summary. */
+const TREND_BARS = 12;
+
+/** The explored folder's size in each saved scan, as bars ending with this scan. Click one to compare with it. */
 function TrendChart() {
   const trend = useStore((s) => s.trend);
   const now = useStore((s) => s.folder?.tree.size ?? 0);
   const name = useStore((s) => s.folder?.ancestors.at(-1)?.name ?? '');
   const baseline = useStore((s) => s.summary?.baseline?.id);
-  const { setBaseline, showTip, moveTip, hideTip } = useStore.getState();
-  const ref = useRef<HTMLDivElement>(null);
-  const { width: W, height: H } = useSize(ref);
+  const { setBaseline, clearHistory, showTip, moveTip, hideTip } = useStore.getState();
   if (!trend.length) return null;
 
-  const points = [...trend, { taken: Math.floor(Date.now() / 1000), bytes: now, snapshot: undefined, now: true }];
-  const first = points[0];
-  const change = now - first.bytes;
-  const lo = Math.min(...points.map((p) => p.bytes));
-  const hi = Math.max(...points.map((p) => p.bytes));
-  const pad = (hi - lo) * 0.15 || hi * 0.05 || 1;
-  const [y0, y1] = [Math.max(0, lo - pad), hi + pad];
-  const [t0, t1] = [first.taken, points.at(-1)!.taken];
-  const left = 8;
-  const right = 64;
-  const top = 10;
-  const bottom = 22;
-  const x = (t: number) => left + ((t - t0) / (t1 - t0 || 1)) * (W - left - right);
-  const y = (b: number) => top + (1 - (b - y0) / (y1 - y0)) * (H - top - bottom);
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.taken).toFixed(1)},${y(p.bytes).toFixed(1)}`).join('');
-  const area = `${line}L${x(t1).toFixed(1)},${H - bottom}L${x(t0).toFixed(1)},${H - bottom}Z`;
-  const ticks = [y0 + (y1 - y0) * 0.15, (y0 + y1) / 2, y1 - (y1 - y0) * 0.15];
+  const all = [...trend.map((p) => ({ ...p, now: false })), { taken: Math.floor(Date.now() / 1000), bytes: now, snapshot: undefined, now: true }];
+  const first = all[0];
+  const shown = all.slice(-TREND_BARS);
+  const lo = Math.min(...shown.map((p) => p.bytes));
+  const hi = Math.max(...shown.map((p) => p.bytes));
+  // Sizes of one folder sit close together, so bars start from the smallest
+  // shown size; the change labels carry the real differences.
+  const height = (b: number) => `${hi > lo ? 22 + ((b - lo) / (hi - lo)) * 78 : 100}%`;
 
   return (
-    <section className="trend" aria-label="Size over time">
+    <section className="trend" aria-label={`${name} over time`}>
       <div className="trend-head">
-        <strong>{name} over time</strong>
-        <span>
-          {formatDelta(change) || 'No change'} since {formatDate(first.taken)} · {points.length} scans
-        </span>
+        <div>
+          <h3>{name} over time</h3>
+          <p>
+            {formatDelta(now - first.bytes) || 'No change'} since {formatDate(first.taken)} · {all.length} scans. Click a scan to compare with it.
+          </p>
+        </div>
+        <button type="button" className="btn-ghost group-btn" onClick={clearHistory}>
+          Forget saved scans
+        </button>
       </div>
-      <div className="trend-plot" ref={ref}>
-        {W > 0 && (
-          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${name}: ${formatBytes(first.bytes)} to ${formatBytes(now)}`}>
-            {ticks.map((b) => (
-              <g key={b}>
-                <line className="trend-grid" x1={left} x2={W - right + 8} y1={y(b)} y2={y(b)} />
-                <text x={W - right + 14} y={y(b) + 4}>
-                  {formatBytes(b)}
-                </text>
-              </g>
-            ))}
-            <path className="trend-area" d={area} />
-            <path className="trend-line" d={line} />
-            <text x={x(t0)} y={H - 4}>
-              {shortDate(t0)}
-            </text>
-            <text x={x(t1)} y={H - 4} textAnchor="end">
-              Now
-            </text>
-            {points.map((p, i) => {
-              const prev = points[i - 1];
-              const diff = prev ? formatDelta(p.bytes - prev.bytes) : '';
-              const tip = `${'now' in p ? 'Now' : formatDate(p.taken)} — ${formatBytes(p.bytes)}${diff ? ` (${diff})` : ''}${p.snapshot ? ' · click to compare' : ''}`;
-              return (
-                <g key={p.taken}>
-                  <circle className={`trend-dot${'now' in p ? ' now' : ''}`} cx={x(p.taken)} cy={y(p.bytes)} r={p.snapshot && p.snapshot === baseline ? 6 : 4} />
-                  <circle
-                    className={`trend-hit${p.snapshot ? ' pick' : ''}`}
-                    cx={x(p.taken)}
-                    cy={y(p.bytes)}
-                    r={12}
-                    onMouseEnter={(e) => showTip(tip, e.clientX, e.clientY)}
-                    onMouseMove={(e) => moveTip(e.clientX, e.clientY)}
-                    onMouseLeave={hideTip}
-                    onClick={() => p.snapshot && setBaseline(p.snapshot)}
-                  />
-                </g>
-              );
-            })}
-          </svg>
-        )}
+      <div className="trend-bars">
+        {shown.map((p) => {
+          const prev = all[all.indexOf(p) - 1];
+          const diff = prev ? p.bytes - prev.bytes : 0;
+          const base = p.snapshot != null && p.snapshot === baseline;
+          const label = p.now ? 'Now' : shortDate(p.taken);
+          return (
+            <button
+              key={p.taken}
+              type="button"
+              className={`trend-col${p.now ? ' now' : ''}${base ? ' base' : ''}`}
+              disabled={!p.snapshot}
+              aria-pressed={base}
+              onClick={() => p.snapshot && setBaseline(base ? null : p.snapshot)}
+              onMouseEnter={(e) =>
+                showTip(
+                  `${p.now ? 'This scan' : formatDate(p.taken)} — ${formatBytes(p.bytes)}${base ? ' · compared' : p.snapshot ? ' · click to compare' : ''}`,
+                  e.clientX,
+                  e.clientY,
+                )
+              }
+              onMouseMove={(e) => moveTip(e.clientX, e.clientY)}
+              onMouseLeave={hideTip}
+            >
+              <span className={`trend-delta delta${diff > 0 ? ' up' : diff < 0 ? ' down' : ''}`}>{prev ? formatDelta(diff) || '±0' : ''}</span>
+              <span className="trend-track">
+                <i style={{ height: height(p.bytes) }} />
+              </span>
+              <span className="trend-size">{formatBytes(p.bytes)}</span>
+              <span className="trend-date">{label}</span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -692,7 +681,8 @@ function ChangesView() {
   const { setBaseline, clearHistory, openItem, reveal, toggleCollect } = useStore.getState();
   const collector = useStore((s) => s.collector);
 
-  const picker = snapshots.length > 0 && (
+  const trend = useStore((s) => s.trend);
+  const picker = snapshots.length > 0 && !trend.length && (
     <div className="changes-bar">
       <label>
         Compared with
