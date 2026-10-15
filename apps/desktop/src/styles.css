@@ -134,6 +134,7 @@ kbd { font: 11px ui-monospace, monospace; color: var(--faint); border: 1px solid
 
 .tiles { display: flex; flex-direction: column; gap: 6px; }
 .tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tile-grid > .tile:last-child:nth-child(odd) { grid-column: 1 / -1; height: 52px; flex-direction: row; gap: 10px; }
 .tile {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
   height: 70px; border-radius: 14px; background: var(--tile); border: 1px solid var(--line); font-size: 13px;
@@ -256,6 +257,7 @@ kbd { font: 11px ui-monospace, monospace; color: var(--faint); border: 1px solid
 .empty-state { padding: 36px; text-align: center; color: var(--muted); border-radius: 14px; background: var(--row); }
 .cols-files-age { grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) 0.8fr 1fr 150px; }
 .cols-changes { grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) 0.8fr 0.8fr 0.9fr 150px; }
+.cols-worktrees { grid-template-columns: minmax(0, 2fr) minmax(0, 1.6fr) 0.8fr 1fr 150px; }
 .cols-hidden { grid-template-columns: minmax(0, 1.4fr) 0.7fr minmax(0, 3fr); }
 .cols-hidden.trow { padding-top: 12px; padding-bottom: 12px; }
 .cell.wrap { white-space: normal; font-size: 13px; line-height: 1.45; }
@@ -276,11 +278,31 @@ kbd { font: 11px ui-monospace, monospace; color: var(--faint); border: 1px solid
 code { font: 12px ui-monospace, monospace; background: var(--row); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--text); -webkit-user-select: text; user-select: text; }
 .risk { font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; border-radius: 6px; padding: 2px 7px; }
 .risk.safe { background: var(--ink); color: var(--on-ink); }
+.tag { font-size: 11px; font-weight: 500; border-radius: 6px; padding: 2px 7px; border: 1px solid var(--line-strong); color: var(--muted); white-space: nowrap; }
+.wt-name { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wt-name > span { overflow: hidden; text-overflow: ellipsis; }
+.wt-tags { display: flex; gap: 6px; }
+.trow.gone { color: var(--muted); }
+.group-path { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .risk.review { border: 1px solid var(--line-strong); color: var(--muted); }
 .empty-state p { margin: 0 auto 14px; max-width: 520px; }
 .empty-state.busy { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .progress { width: 220px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--ink); transition: width .15s; }
+.trend { border-radius: 18px; border: 1px solid var(--line); padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 6px; }
+.trend-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.trend-head strong { font-weight: 500; font-size: 15px; }
+.trend-head span { color: var(--muted); font-size: 13px; }
+.trend-plot { position: relative; height: 170px; }
+.trend-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.trend-plot text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.trend-grid { stroke: var(--line); stroke-dasharray: 3 4; }
+.trend-area { fill: color-mix(in srgb, var(--ink) 8%, transparent); }
+.trend-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.trend-dot { fill: var(--bg); stroke: var(--ink); stroke-width: 2; }
+.trend-dot.now { fill: var(--ink); }
+.trend-hit { fill: transparent; cursor: default; }
+.trend-hit.pick { cursor: pointer; }
 .changes-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .changes-bar label { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
 .changes-bar select { height: 36px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); padding: 0 10px; font: inherit; font-size: 13px; }

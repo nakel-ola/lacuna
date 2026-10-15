@@ -100,6 +100,29 @@ export interface Suggestion {
   items: Hit[];
 }
 
+export type WorktreeState = 'active' | 'locked' | 'missing' | 'orphaned';
+
+export interface Worktree {
+  name: string;
+  path: string;
+  branch?: string;
+  /** The tool that usually keeps worktrees at this path. */
+  agent?: string;
+  state: WorktreeState;
+  /** The checkout in the scan; absent when it's outside the scan or gone. */
+  item?: Hit;
+}
+
+export interface Repo {
+  name: string;
+  /** The main checkout. */
+  path: string;
+  exists: boolean;
+  /** Space used by its worktrees that are in the scan. */
+  size: number;
+  worktrees: Worktree[];
+}
+
 export interface DuplicateGroup {
   size: number;
   copies: number;
@@ -135,6 +158,15 @@ export interface SnapshotInfo {
   taken: number;
   bytes: number;
   files: number;
+}
+
+/** A folder's size in one earlier scan. */
+export interface TrendPoint {
+  /** Unix seconds. */
+  taken: number;
+  bytes: number;
+  /** Full snapshot id, when this scan can be compared with. */
+  snapshot?: string;
 }
 
 export interface Change {

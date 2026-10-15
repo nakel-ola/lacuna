@@ -10,13 +10,15 @@ import type {
   Item,
   SnapshotInfo,
   Suggestion,
+  TrendPoint,
+  Repo,
   Summary,
   TrashResult,
   TypeTotal,
   Volume,
 } from './lib/types';
 
-export type Tab = 'overview' | 'large' | 'types' | 'suggestions' | 'duplicates' | 'changes' | 'hidden' | 'cleanup' | 'disks';
+export type Tab = 'overview' | 'large' | 'types' | 'suggestions' | 'worktrees' | 'duplicates' | 'changes' | 'hidden' | 'cleanup' | 'disks';
 export type Filter = 'all' | 'dirs' | 'files' | 'large';
 /** Large files: biggest overall, or biggest untouched for 1 or 2 years. */
 export type LargeMode = 'largest' | 'year' | 'twoYears';
@@ -45,10 +47,13 @@ interface State {
   largeMode: LargeMode;
   chart: Chart;
   suggestions: Suggestion[] | null;
+  worktrees: Repo[] | null;
   /** Duplicate search for the folder `scope`; null until started. */
   duplicates: { scope: number | null; busy: boolean; groups: DuplicateGroup[]; done: number; total: number } | null;
   changes: Changes | null;
   snapshots: SnapshotInfo[];
+  /** Size of the explored folder in earlier scans. */
+  trend: TrendPoint[];
   hidden: HiddenSpace | null;
   /** Search hits, or null when not searching. */
   results: Hit[] | null;
@@ -83,6 +88,7 @@ interface State {
   setChart(chart: Chart): void;
   loadTab(): void;
   loadSuggestions(): Promise<void>;
+  loadWorktrees(): Promise<void>;
   findDuplicates(): Promise<void>;
   cancelDuplicates(): void;
   onDuplicatesProgress(done: number, total: number): void;
@@ -132,9 +138,11 @@ export const useStore = create<State>()((set, get) => ({
   largeMode: 'largest',
   chart: storedChart(),
   suggestions: null,
+  worktrees: null,
   duplicates: null,
   changes: null,
   snapshots: [],
+  trend: [],
   hidden: null,
   results: null,
   query: '',
@@ -189,9 +197,11 @@ export const useStore = create<State>()((set, get) => ({
         types: [],
         large: [],
         suggestions: null,
+        worktrees: null,
         duplicates: null,
         changes: null,
         snapshots: [],
+        trend: [],
         hidden: null,
         results: null,
         query: '',
@@ -295,6 +305,7 @@ export const useStore = create<State>()((set, get) => ({
     const tab = get().tab;
     if (tab === 'large') get().loadLarge();
     else if (tab === 'suggestions') get().loadSuggestions();
+    else if (tab === 'worktrees') get().loadWorktrees();
     else if (tab === 'changes') get().loadChanges();
     else if (tab === 'hidden') get().loadHidden();
   },
@@ -304,6 +315,16 @@ export const useStore = create<State>()((set, get) => ({
     try {
       const suggestions = await api.suggestions(viewId);
       if (get().viewId === viewId) set({ suggestions });
+    } catch (err) {
+      get().showError(err);
+    }
+  },
+
+  async loadWorktrees() {
+    const viewId = get().viewId;
+    try {
+      const worktrees = await api.gitWorktrees(viewId);
+      if (get().viewId === viewId) set({ worktrees });
     } catch (err) {
       get().showError(err);
     }
@@ -336,8 +357,8 @@ export const useStore = create<State>()((set, get) => ({
   async loadChanges() {
     const viewId = get().viewId;
     try {
-      const [changes, snapshots] = await Promise.all([api.getChanges(viewId), api.listSnapshots()]);
-      if (get().viewId === viewId) set({ changes, snapshots });
+      const [changes, snapshots, trend] = await Promise.all([api.getChanges(viewId), api.listSnapshots(), api.sizeHistory(viewId)]);
+      if (get().viewId === viewId) set({ changes, snapshots, trend });
     } catch (err) {
       get().showError(err);
     }
@@ -354,7 +375,7 @@ export const useStore = create<State>()((set, get) => ({
 
   async clearHistory() {
     try {
-      set({ summary: await api.clearHistory(), changes: null, snapshots: [] });
+      set({ summary: await api.clearHistory(), changes: null, snapshots: [], trend: [] });
       get().refresh(true);
     } catch (err) {
       get().showError(err);

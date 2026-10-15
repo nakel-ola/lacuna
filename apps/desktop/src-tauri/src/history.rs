@@ -5,6 +5,10 @@
 //! a JSON header line, then `size<TAB>kind<TAB>relative/path` per entry.
 //! Only folders of `DIR_MIN` and files of `FILE_MIN` or more are kept, which
 //! keeps a whole-disk snapshot to a few megabytes.
+//!
+//! Only the last `KEEP` snapshots are kept in full. For the longer view, each
+//! scan also appends its folders of `TREND_MIN` or more to a small trend log,
+//! so the size of big folders can be charted over many scans.
 
 use crate::scanner::{Kind, Tree, NO_PARENT, ROOT};
 use serde::{Deserialize, Serialize};
@@ -19,6 +23,10 @@ pub const FILE_MIN: u64 = 64_000_000;
 const HOT_MIN: u64 = 50_000_000;
 /// Snapshots kept per scanned folder.
 const KEEP: usize = 12;
+/// Folders at least this big go in the trend log.
+const TREND_MIN: u64 = 1_000_000_000;
+/// Scans kept in the trend log.
+const TREND_KEEP: usize = 365;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +62,18 @@ pub struct Change {
     pub after: u64,
 }
 
+/// One scan's size of a folder, for the size-over-time chart.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Point {
+    /// Unix seconds.
+    pub taken: u64,
+    pub bytes: u64,
+    /// Set when a full snapshot exists, so it can be compared with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Changes {
@@ -73,7 +93,7 @@ fn key(root: &Path) -> String {
     format!("{h:016x}")
 }
 
-fn rel_path(tree: &Tree, id: u32) -> String {
+pub fn rel_path(tree: &Tree, id: u32) -> String {
     let mut parts = Vec::new();
     let mut cur = id;
     while cur != ROOT && cur != NO_PARENT {
@@ -93,11 +113,20 @@ fn entries(tree: &Tree, id: u32, mut f: impl FnMut(u32, &str, bool)) {
         f(n, &path, true);
         for &c in &node.children {
             let child = &tree.nodes[c as usize];
+            // Most children are too small to keep, so only kept ones get a path.
+            let keep = match child.kind {
+                Kind::Dir => child.size >= DIR_MIN,
+                Kind::File => child.size >= FILE_MIN,
+                _ => false,
+            };
+            if !keep {
+                continue;
+            }
             let child_path = if path.is_empty() { child.name.to_string() } else { format!("{path}/{}", child.name) };
-            match child.kind {
-                Kind::Dir if child.size >= DIR_MIN => stack.push((c, child_path)),
-                Kind::File if child.size >= FILE_MIN => f(c, &child_path, false),
-                _ => {}
+            if child.kind == Kind::Dir {
+                stack.push((c, child_path));
+            } else {
+                f(c, &child_path, false);
             }
         }
     }
@@ -127,8 +156,84 @@ pub fn save(dir: &Path, tree: &Tree, label: &str, taken: u64) -> std::io::Result
     for old in list(dir, &tree.root_path).into_iter().skip(KEEP) {
         let _ = fs::remove_file(dir.join(old.id));
     }
+    // The trend is extra: a failure here doesn't lose the snapshot.
+    let _ = append_trend(dir, tree, taken);
     info.id = id;
     Ok(info)
+}
+
+fn trend_file(dir: &Path, root: &Path) -> PathBuf {
+    dir.join(format!("{}.trend", key(root)))
+}
+
+/// Appends `@<TAB>taken`, then `size<TAB>path` for the root and each big folder, and
+/// trims the log to the last `TREND_KEEP` scans once it's well past that.
+fn append_trend(dir: &Path, tree: &Tree, taken: u64) -> std::io::Result<()> {
+    use std::fmt::Write as _;
+    let mut block = format!("@\t{taken}\n");
+    entries(tree, ROOT, |n, path, is_dir| {
+        let size = tree.nodes[n as usize].size;
+        if is_dir && (size >= TREND_MIN || n == ROOT) && !path.contains(['\n', '\t']) {
+            let _ = writeln!(block, "{size}\t{path}");
+        }
+    });
+    let file = trend_file(dir, &tree.root_path);
+    let mut text = fs::read_to_string(&file).unwrap_or_default();
+    text.push_str(&block);
+    let scans = text.lines().filter(|l| l.starts_with("@\t")).count();
+    if scans > TREND_KEEP + 30 {
+        let starts: Vec<usize> = text.match_indices("@\t").map(|(i, _)| i).filter(|&i| i == 0 || text.as_bytes()[i - 1] == b'\n').collect();
+        text.drain(..starts[scans - TREND_KEEP]);
+    }
+    let tmp = file.with_extension("trend.tmp");
+    fs::write(&tmp, text)?;
+    fs::rename(tmp, file)
+}
+
+/// Sizes of the folder at `rel` (relative to `root`) in earlier scans, oldest
+/// first. Full snapshots cover every folder of `DIR_MIN` or more; the trend
+/// log reaches further back for big folders. The scan taken at `skip` (the
+/// open scan's own snapshot) is left out, since the UI shows it as "now".
+pub fn timeline(dir: &Path, root: &Path, rel: &str, skip: Option<u64>) -> Vec<Point> {
+    let mut points: std::collections::BTreeMap<u64, Point> = std::collections::BTreeMap::new();
+    if let Ok(text) = fs::read_to_string(trend_file(dir, root)) {
+        let mut taken = None;
+        for line in text.lines() {
+            if let Some(t) = line.strip_prefix("@\t") {
+                taken = t.parse().ok();
+            } else if let (Some(t), Some((size, path))) = (taken, line.split_once('\t')) {
+                if path == rel {
+                    if let Ok(bytes) = size.parse() {
+                        points.insert(t, Point { taken: t, bytes, snapshot: None });
+                    }
+                }
+            }
+        }
+    }
+    for info in list(dir, root) {
+        let Ok(file) = fs::File::open(dir.join(&info.id)) else { continue };
+        // Folders too small to be recorded count as empty.
+        let mut bytes = 0;
+        for line in BufReader::new(file).lines().skip(1).map_while(Result::ok) {
+            let mut parts = line.splitn(3, '\t');
+            if let (Some(size), Some("d"), Some(path)) = (parts.next(), parts.next(), parts.next()) {
+                if path == rel {
+                    bytes = size.parse().unwrap_or(0);
+                    break;
+                }
+            }
+        }
+        points.insert(info.taken, Point { taken: info.taken, bytes, snapshot: Some(info.id) });
+    }
+    if let Some(t) = skip {
+        points.remove(&t);
+    }
+    points.into_values().collect()
+}
+
+/// The time in a snapshot id (`<key>-<taken>.tsv`).
+pub fn taken_of(id: &str) -> Option<u64> {
+    id.strip_suffix(".tsv")?.rsplit_once('-')?.1.parse().ok()
 }
 
 /// Snapshots of `root`, newest first.
@@ -179,6 +284,7 @@ pub fn delete_all(dir: &Path, root: &Path) {
     for info in list(dir, root) {
         let _ = fs::remove_file(dir.join(info.id));
     }
+    let _ = fs::remove_file(trend_file(dir, root));
 }
 
 impl Snapshot {
@@ -357,5 +463,63 @@ mod tests {
         assert!(load(data.path(), "../etc/passwd").is_err());
         delete_all(data.path(), &s.tree().root_path);
         assert!(list(data.path(), &s.tree().root_path).is_empty());
+    }
+
+    #[test]
+    fn timeline_follows_a_folder_across_scans() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let r = fs::canonicalize(dir.path()).unwrap();
+        write(&r.join("a/x.bin"), 10_000_000);
+        let first = save(data.path(), &scan(&r).tree(), "r", 100).unwrap();
+        write(&r.join("a/y.bin"), 10_000_000);
+        let s = scan(&r);
+        let second = save(data.path(), &s.tree(), "r", 200).unwrap();
+        let points = timeline(data.path(), &s.tree().root_path, "a", None);
+        assert_eq!(points.iter().map(|p| p.taken).collect::<Vec<_>>(), [100, 200]);
+        assert!(points[1].bytes > points[0].bytes && points[0].bytes >= 10_000_000);
+        assert_eq!(points[0].snapshot.as_deref(), Some(first.id.as_str()));
+        // The open scan's own snapshot is left out.
+        assert_eq!(timeline(data.path(), &s.tree().root_path, "a", taken_of(&second.id)).len(), 1);
+        // Too small to be recorded: counts as empty.
+        assert_eq!(timeline(data.path(), &s.tree().root_path, "missing", None)[0].bytes, 0);
+    }
+
+    #[test]
+    fn trend_log_reaches_past_full_snapshots_and_is_trimmed() {
+        let data = tempfile::tempdir().unwrap();
+        let root = Path::new("/r");
+        let log = trend_file(data.path(), root);
+        let text: String = (0..TREND_KEEP + 31).map(|t| format!("@\t{t}\n{}\t\n5\tsub\n", 1000 + t)).collect();
+        fs::write(&log, text).unwrap();
+        let points = timeline(data.path(), root, "", None);
+        assert_eq!(points.len(), TREND_KEEP + 31);
+        assert_eq!(points[3].bytes, 1003);
+        assert!(points.iter().all(|p| p.snapshot.is_none()));
+        // The next save trims to the newest TREND_KEEP scans.
+        let dir = tempfile::tempdir().unwrap();
+        let s = scan(dir.path());
+        let mut t = s.tree();
+        t.root_path = root.to_path_buf();
+        append_trend(data.path(), &t, 9999).unwrap();
+        let points = timeline(data.path(), root, "", None);
+        assert_eq!(points.len(), TREND_KEEP);
+        assert_eq!(points.last().unwrap().taken, 9999);
+    }
+
+    /// `DA_BENCH_PATH=/System/Volumes/Data DA_BENCH_SNAPSHOT=<dir>/<id>.tsv cargo test --release bench_changes -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn bench_changes() {
+        let path = std::env::var("DA_BENCH_PATH").expect("set DA_BENCH_PATH");
+        let snap = PathBuf::from(std::env::var("DA_BENCH_SNAPSHOT").expect("set DA_BENCH_SNAPSHOT"));
+        let s = scan(Path::new(&path));
+        let t = s.tree();
+        let started = std::time::Instant::now();
+        let b = load(snap.parent().unwrap(), snap.file_name().unwrap().to_str().unwrap()).unwrap();
+        println!("load ms={}", started.elapsed().as_millis());
+        let started = std::time::Instant::now();
+        let c = b.changes(&t, ROOT, 100);
+        println!("changes ms={} hotspots={}", started.elapsed().as_millis(), c.hotspots.len());
     }
 }

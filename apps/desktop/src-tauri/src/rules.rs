@@ -359,7 +359,7 @@ fn find_projects(tree: &Tree, id: u32, names: &[&str], marker: &Marker, claimed:
 
 /// The path as the user sees it: the startup disk's Data volume is
 /// firmlinked into `/`, so `/System/Volumes/Data/Users` is `/Users`.
-fn logical(path: &Path) -> PathBuf {
+pub(crate) fn logical(path: &Path) -> PathBuf {
     match path.strip_prefix("/System/Volumes/Data") {
         Ok(rest) => Path::new("/").join(rest),
         Err(_) => path.to_path_buf(),
@@ -374,7 +374,7 @@ fn expand(p: &str, home: &Path) -> PathBuf {
 }
 
 /// The node at `target`, if it's inside the scan.
-fn resolve(tree: &Tree, root: &Path, target: &Path) -> Option<u32> {
+pub(crate) fn resolve(tree: &Tree, root: &Path, target: &Path) -> Option<u32> {
     let rel = target.strip_prefix(root).ok()?;
     let mut cur = ROOT;
     for part in rel.components() {

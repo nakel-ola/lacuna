@@ -10,6 +10,7 @@ mod scanner;
 mod space;
 mod view;
 mod volumes;
+mod worktrees;
 
 use scanner::{Scanner, Stats, ROOT};
 use serde::Serialize;
@@ -222,21 +223,26 @@ struct Crumb {
 
 #[tauri::command]
 async fn get_tree(app: AppHandle, id: Option<u32>, depth: Option<u32>) -> Result<TreeResponse, String> {
-    let state = app.state::<AppState>();
-    let guard = lock(&state);
-    let s = guard.as_ref().ok_or("No scan loaded")?;
-    let tree = s.scanner.tree();
+    // Copy what's needed and let go of the session, so commands that only
+    // need the session don't wait for this view.
+    let (scan_id, label, scanner, baseline) = {
+        let state = app.state::<AppState>();
+        let guard = lock(&state);
+        let s = guard.as_ref().ok_or("No scan loaded")?;
+        (s.id, s.label.clone(), s.scanner.clone(), s.baseline.clone())
+    };
+    let tree = scanner.tree();
     let id = id.unwrap_or(ROOT);
     if !tree.is_attached(id) {
         return Err("Unknown item".into());
     }
     let mut ancestors: Vec<Crumb> = tree.ancestors(id).into_iter().map(|(id, name)| Crumb { id, name }).collect();
-    ancestors[0].name = s.label.clone();
+    ancestors[0].name = label;
     Ok(TreeResponse {
-        scan_id: s.id,
+        scan_id,
         path: tree.path_of(id).to_string_lossy().into_owned(),
         ancestors,
-        tree: view::view(&tree, id, depth.unwrap_or(5).min(view::MAX_DEPTH), s.baseline.as_deref()),
+        tree: view::view(&tree, id, depth.unwrap_or(5).min(view::MAX_DEPTH), baseline.as_deref()),
     })
 }
 
@@ -278,6 +284,11 @@ async fn untouched_items(app: AppHandle, id: Option<u32>, days: u32, limit: Opti
 async fn suggestions(app: AppHandle, id: Option<u32>) -> Result<Vec<rules::Suggestion>, String> {
     let home = home();
     with_node(&app, id, |tree, id| rules::suggest(tree, id, &home))
+}
+
+#[tauri::command]
+async fn git_worktrees(app: AppHandle, id: Option<u32>) -> Result<Vec<worktrees::Repo>, String> {
+    with_node(&app, id, worktrees::find)
 }
 
 /// Reads candidate files in full, so it runs off the async runtime and stops
@@ -331,17 +342,41 @@ async fn hidden_space(app: AppHandle) -> Result<Option<space::Report>, String> {
 
 /// Earlier scans of the open folder, newest first.
 #[tauri::command]
-fn list_snapshots(app: AppHandle) -> Result<Vec<history::Info>, String> {
-    let state = app.state::<AppState>();
-    let guard = lock(&state);
-    let s = guard.as_ref().ok_or("No scan loaded")?;
+async fn list_snapshots(app: AppHandle) -> Result<Vec<history::Info>, String> {
+    let (scanner, own) = {
+        let state = app.state::<AppState>();
+        let guard = lock(&state);
+        let s = guard.as_ref().ok_or("No scan loaded")?;
+        (s.scanner.clone(), s.own_snapshot.clone())
+    };
     let Some(dir) = history_dir(&app) else { return Ok(Vec::new()) };
-    let root = s.scanner.tree().root_path.clone();
-    Ok(history::list(&dir, &root).into_iter().filter(|i| Some(&i.id) != s.own_snapshot.as_ref()).collect())
+    let root = scanner.tree().root_path.clone();
+    Ok(history::list(&dir, &root).into_iter().filter(|i| Some(&i.id) != own.as_ref()).collect())
+}
+
+/// The size of a folder in earlier scans, oldest first.
+#[tauri::command]
+async fn size_history(app: AppHandle, id: Option<u32>) -> Result<Vec<history::Point>, String> {
+    let (scanner, own) = {
+        let state = app.state::<AppState>();
+        let guard = lock(&state);
+        let s = guard.as_ref().ok_or("No scan loaded")?;
+        (s.scanner.clone(), s.own_snapshot.clone())
+    };
+    let Some(dir) = history_dir(&app) else { return Ok(Vec::new()) };
+    let (root, rel) = {
+        let tree = scanner.tree();
+        let id = id.unwrap_or(ROOT);
+        if !tree.is_attached(id) {
+            return Err("Unknown item".into());
+        }
+        (tree.root_path.clone(), history::rel_path(&tree, id))
+    };
+    Ok(history::timeline(&dir, &root, &rel, own.as_deref().and_then(history::taken_of)))
 }
 
 #[tauri::command]
-fn set_baseline(app: AppHandle, snapshot: Option<String>) -> Result<Summary, String> {
+async fn set_baseline(app: AppHandle, snapshot: Option<String>) -> Result<Summary, String> {
     let loaded = match &snapshot {
         Some(id) => {
             let dir = history_dir(&app).ok_or("No history folder")?;
@@ -361,11 +396,14 @@ fn set_baseline(app: AppHandle, snapshot: Option<String>) -> Result<Summary, Str
 
 #[tauri::command]
 async fn get_changes(app: AppHandle, id: Option<u32>) -> Result<Option<history::Changes>, String> {
-    let state = app.state::<AppState>();
-    let guard = lock(&state);
-    let s = guard.as_ref().ok_or("No scan loaded")?;
-    let Some(baseline) = s.baseline.clone() else { return Ok(None) };
-    let tree = s.scanner.tree();
+    let (scanner, baseline) = {
+        let state = app.state::<AppState>();
+        let guard = lock(&state);
+        let s = guard.as_ref().ok_or("No scan loaded")?;
+        (s.scanner.clone(), s.baseline.clone())
+    };
+    let Some(baseline) = baseline else { return Ok(None) };
+    let tree = scanner.tree();
     let id = id.unwrap_or(ROOT);
     if !tree.is_attached(id) {
         return Err("Unknown item".into());
@@ -375,7 +413,7 @@ async fn get_changes(app: AppHandle, id: Option<u32>) -> Result<Option<history::
 
 /// Forgets every saved scan of the open folder.
 #[tauri::command]
-fn clear_history(app: AppHandle) -> Result<Summary, String> {
+async fn clear_history(app: AppHandle) -> Result<Summary, String> {
     let dir = history_dir(&app).ok_or("No history folder")?;
     let state = app.state::<AppState>();
     let mut guard = lock(&state);
@@ -616,10 +654,12 @@ pub fn run() {
             search_items,
             untouched_items,
             suggestions,
+            git_worktrees,
             find_duplicates,
             cancel_duplicates,
             hidden_space,
             list_snapshots,
+            size_history,
             set_baseline,
             get_changes,
             clear_history,

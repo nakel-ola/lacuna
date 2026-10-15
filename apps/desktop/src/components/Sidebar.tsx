@@ -44,6 +44,7 @@ function Tiles() {
       <div className="tile-grid">
         {tile('suggestions', 'spark', 'Suggestions')}
         {tile('large', 'file', 'Large files')}
+        {tile('worktrees', 'branch', 'Worktrees')}
         {tile('duplicates', 'copy', 'Duplicates')}
         {tile('changes', 'history', 'Changes')}
         {tile('types', 'layers', 'File types')}
