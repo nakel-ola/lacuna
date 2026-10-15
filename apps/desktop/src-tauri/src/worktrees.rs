@@ -6,6 +6,11 @@
 //! their checkouts. Git's own records (`.git/worktrees/<name>/`) list every
 //! worktree of a repository, including ones outside the scan, and those
 //! records are read from disk. Nothing is changed here.
+//!
+//! Agents sometimes delete git's record of a worktree but leave its folder
+//! behind, often full of build output. Those checkouts (a `.git` file with no
+//! record, or a folder in `.claude/worktrees` with no `.git` at all) are
+//! listed too, as untracked.
 
 use crate::insights::{self, Hit};
 use crate::rules::{logical, resolve};
@@ -25,6 +30,8 @@ pub enum State {
     Missing,
     /// A checkout whose repository no longer exists.
     Orphaned,
+    /// A leftover checkout folder git no longer has a record of.
+    Untracked,
 }
 
 #[derive(Serialize)]
@@ -61,6 +68,8 @@ pub fn find(tree: &Tree, id: u32) -> Vec<Repo> {
     let root = logical(&tree.root_path);
     let mut git_dirs = BTreeSet::new();
     let mut orphans: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
+    // Checkout folders seen in the scan, by repository; matched against git's records later.
+    let mut seen: BTreeMap<PathBuf, BTreeSet<PathBuf>> = BTreeMap::new();
 
     let mut stack = vec![id];
     while let Some(n) = stack.pop() {
@@ -79,7 +88,8 @@ pub fn find(tree: &Tree, id: u32) -> Vec<Repo> {
                         let checkout = path.parent().unwrap_or(&path).to_path_buf();
                         if let Some(common) = read_gitdir(&path).and_then(|meta| common_dir(&meta)) {
                             if common.is_dir() {
-                                git_dirs.insert(common);
+                                git_dirs.insert(common.clone());
+                                seen.entry(common).or_default().insert(checkout);
                             } else {
                                 orphans.entry(common).or_default().push(checkout);
                             }
@@ -90,6 +100,21 @@ pub fn find(tree: &Tree, id: u32) -> Vec<Repo> {
                 continue;
             }
             if child.kind == Kind::Dir && !matches!(&*child.name, "node_modules" | ".Trash") {
+                // Claude Code keeps worktrees in <repo>/.claude/worktrees; a folder
+                // there without a .git file is what's left after a partial cleanup.
+                if &*child.name == "worktrees" && &*tree.nodes[n as usize].name == ".claude" {
+                    let base = logical(&tree.path_of(c));
+                    if let Some(common) = base.parent().and_then(Path::parent).map(|repo| repo.join(".git")).filter(|g| g.is_dir()) {
+                        for &w in &child.children {
+                            let folder = &tree.nodes[w as usize];
+                            let has_git = folder.children.iter().any(|&g| &*tree.nodes[g as usize].name == ".git");
+                            if folder.kind == Kind::Dir && !folder.removed && !has_git {
+                                git_dirs.insert(common.clone());
+                                seen.entry(common.clone()).or_default().insert(base.join(&*folder.name));
+                            }
+                        }
+                    }
+                }
                 stack.push(c);
             }
         }
@@ -102,9 +127,8 @@ pub fn find(tree: &Tree, id: u32) -> Vec<Repo> {
     let mut repos = Vec::new();
 
     for git_dir in git_dirs {
-        let Ok(entries) = fs::read_dir(git_dir.join("worktrees")) else { continue };
         let mut worktrees = Vec::new();
-        for entry in entries.flatten() {
+        for entry in fs::read_dir(git_dir.join("worktrees")).into_iter().flatten().flatten() {
             let meta = entry.path();
             let Some(dot_git) = read_gitdir(&meta.join("gitdir")) else { continue };
             let checkout = dot_git.parent().map(Path::to_path_buf).unwrap_or(dot_git.clone());
@@ -122,6 +146,21 @@ pub fn find(tree: &Tree, id: u32) -> Vec<Repo> {
                 agent: agent(&checkout),
                 state,
                 item: if state == State::Missing { None } else { hit(&checkout) },
+            });
+        }
+        for checkout in seen.remove(&git_dir).unwrap_or_default() {
+            if worktrees.iter().any(|w| Path::new(&w.path) == checkout) {
+                continue;
+            }
+            // Empty leftovers aren't worth a row.
+            let Some(item) = hit(&checkout).filter(|i| i.size > 0) else { continue };
+            worktrees.push(Worktree {
+                name: file_name(&checkout),
+                path: checkout.to_string_lossy().into_owned(),
+                branch: None,
+                agent: agent(&checkout),
+                state: State::Untracked,
+                item: Some(item),
             });
         }
         if !worktrees.is_empty() {
@@ -215,6 +254,7 @@ fn agent(checkout: &Path) -> Option<&'static str> {
         ("/.codex/worktrees/", "Codex"),
         ("/.cursor/worktrees/", "Cursor"),
         ("/conductor/workspaces/", "Conductor"),
+        ("/.t3/worktrees/", "T3 Code"),
     ];
     let path = checkout.to_string_lossy();
     KNOWN.iter().find(|(part, _)| path.contains(part)).map(|&(_, name)| name)
@@ -259,6 +299,13 @@ mod tests {
         write(&repo.join("vendor/lib/.git"), &format!("gitdir: {}\n", repo.join(".git/modules/lib").display()));
         // A worktree whose repository was deleted.
         write(&home.join("old/task/.git"), &format!("gitdir: {}\n", home.join("deleted/.git/worktrees/task").display()));
+        // An agent removed git's record but left the folder (with build output).
+        write(&repo.join(".claude/worktrees/agent-1/.git"), &format!("gitdir: {}\n", repo.join(".git/worktrees/agent-1").display()));
+        write(&repo.join(".claude/worktrees/agent-1/target/big.bin"), &"x".repeat(80_000));
+        // Or removed the .git file too.
+        write(&repo.join(".claude/worktrees/agent-2/node_modules/a.js"), &"x".repeat(60_000));
+        // Empty leftovers are skipped.
+        fs::create_dir_all(repo.join(".claude/worktrees/empty")).unwrap();
         // Plain repositories without worktrees are left out.
         write(&home.join("code/plain/.git/HEAD"), "ref: refs/heads/main\n");
 
@@ -270,13 +317,15 @@ mod tests {
         assert_eq!(repos.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["app", "deleted"]);
         let app = &repos[0];
         let rows = app.worktrees.iter().map(|w| (w.name.as_str(), w.state, w.branch.as_deref(), w.agent)).collect::<Vec<_>>();
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 5);
+        assert!(rows.contains(&("agent-1", State::Untracked, None, Some("Claude Code"))));
+        assert!(rows.contains(&("agent-2", State::Untracked, None, Some("Claude Code"))));
         assert!(rows.contains(&("fix-login", State::Active, Some("fix-login"), Some("Claude Code"))));
         assert!(rows.contains(&("docs", State::Locked, Some("docs"), None)));
         // Missing ones sort last and have no item to collect.
-        assert_eq!(rows[2], ("gone", State::Missing, None, None));
-        assert!(app.worktrees[2].item.is_none());
-        assert!(app.worktrees[..2].iter().all(|w| w.item.as_ref().is_some_and(|i| i.size > 0)));
+        assert_eq!(rows[4], ("gone", State::Missing, None, None));
+        assert!(app.worktrees[4].item.is_none());
+        assert!(app.worktrees[..4].iter().all(|w| w.item.as_ref().is_some_and(|i| i.size > 0)));
         assert_eq!(app.size, app.worktrees.iter().filter_map(|w| w.item.as_ref()).map(|i| i.size).sum::<u64>());
 
         let deleted = &repos[1];

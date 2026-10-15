@@ -100,7 +100,7 @@ export interface Suggestion {
   items: Hit[];
 }
 
-export type WorktreeState = 'active' | 'locked' | 'missing' | 'orphaned';
+export type WorktreeState = 'active' | 'locked' | 'missing' | 'orphaned' | 'untracked';
 
 export interface Worktree {
   name: string;

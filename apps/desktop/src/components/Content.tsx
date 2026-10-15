@@ -419,6 +419,7 @@ const STATE_LABEL: Record<Worktree['state'], string> = {
   locked: 'Locked',
   missing: 'Already deleted',
   orphaned: 'Repository gone',
+  untracked: 'Not tracked by git',
 };
 
 function WorktreesList() {
@@ -430,7 +431,8 @@ function WorktreesList() {
       <Note>
         Coding agents and <code>git worktree add</code> create a full checkout for each task, often with its own <code>node_modules</code> and build
         folders, and don’t always remove it. Removing a worktree keeps its branch and commits in the repository; only uncommitted changes in it are
-        lost, so check those first. Locked worktrees are left out of “Add all”.
+        lost, so check those first. “Not tracked by git” folders are leftovers git has already forgotten, usually safe to remove. Locked
+        worktrees are left out of “Add all”.
       </Note>
       {repos.map((r) => (
         <RepoCard key={r.path} repo={r} />
