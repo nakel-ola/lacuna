@@ -610,7 +610,8 @@ function TrendChart() {
   const now = useStore((s) => s.folder?.tree.size ?? 0);
   const name = useStore((s) => s.folder?.ancestors.at(-1)?.name ?? '');
   const baseline = useStore((s) => s.summary?.baseline?.id);
-  const { setBaseline, clearHistory, showTip, moveTip, hideTip } = useStore.getState();
+  const canGoUp = useStore((s) => (s.folder?.ancestors.length ?? 0) > 1);
+  const { setBaseline, clearHistory, goUp, showTip, moveTip, hideTip } = useStore.getState();
   if (!trend.length) return null;
 
   const all = [...trend.map((p) => ({ ...p, now: false })), { taken: Math.floor(Date.now() / 1000), bytes: now, snapshot: undefined, now: true }];
@@ -626,7 +627,14 @@ function TrendChart() {
     <section className="trend" aria-label={`${name} over time`}>
       <div className="trend-head">
         <div>
-          <h3>{name} over time</h3>
+          <h3>
+            {canGoUp && (
+              <button type="button" className="icon-btn" title="Up one folder" onClick={goUp}>
+                <Icon name="up" />
+              </button>
+            )}
+            {name} over time
+          </h3>
           <p>
             {formatDelta(now - first.bytes) || 'No change'} since {formatDate(first.taken)} · {all.length} scans. Click a scan to compare with it.
           </p>
@@ -665,6 +673,7 @@ function TrendChart() {
               </span>
               <span className="trend-size">{formatBytes(p.bytes)}</span>
               <span className="trend-date">{label}</span>
+              {base && <span className="tag">Compared</span>}
             </button>
           );
         })}

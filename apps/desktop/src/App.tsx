@@ -105,7 +105,8 @@ export function App() {
           <DisksView />
         ) : (
           <>
-            <Hero />
+            {/* Changes has its own chart: the folder's size over time. */}
+            {tab !== 'changes' && <Hero />}
             <Content />
           </>
         )}
