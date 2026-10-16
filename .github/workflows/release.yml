@@ -10,7 +10,9 @@
 # Signing: without secrets the app is ad-hoc signed, so macOS asks users to allow it on first
 # launch. Add these repository secrets (Settings → Secrets and variables → Actions) to sign with a
 # Developer ID and notarize instead: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
-# APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific password), APPLE_TEAM_ID.
+# APPLE_SIGNING_IDENTITY, and an App Store Connect API key for notarizing: APPLE_API_ISSUER,
+# APPLE_API_KEY (key ID), APPLE_API_KEY_CONTENT (the .p8 file).
+# scripts/setup-signing.sh sets them all from the .p12 and .p8 files.
 
 name: Release
 
@@ -63,6 +65,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Write the notarization key
+        if: env.HAS_SIGNING == 'true'
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$APPLE_API_KEY_CONTENT" > "$key"
+          echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
+
       - name: Build and publish (Developer ID signed + notarized)
         if: env.HAS_SIGNING == 'true'
         uses: tauri-apps/tauri-action@v0
@@ -71,9 +82,8 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -83,6 +93,13 @@ jobs:
           releaseBody: ${{ env.RELEASE_BODY }}
           releaseDraft: false
           prerelease: false
+
+      - name: Check macOS will open the app without asking
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          app=apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/Lacuna.app
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
 
       - name: Build and publish (ad-hoc signed)
         if: env.HAS_SIGNING != 'true'
