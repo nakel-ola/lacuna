@@ -236,6 +236,58 @@ kbd { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--line-
 .mini-keys span { display: flex; align-items: center; gap: 5px; padding: 14px; border-radius: 14px; background: var(--bg); font-size: 14px; color: var(--muted); }
 .mini-keys kbd:last-of-type { margin-right: 6px; }
 
+.mini-list .tag { margin-left: auto; }
+.tag { flex: none; font: 500 11px var(--mono); font-style: normal; padding: 2px 7px; border-radius: 6px; background: var(--paper); color: var(--muted); white-space: nowrap; }
+.tag-safe, .tag-active { background: var(--sage-deep); color: var(--text); }
+
+.mini-map { flex: 1; display: grid; grid-template: repeat(4, 1fr) / repeat(6, 1fr); gap: 4px; min-height: 180px; }
+.mini-map span { display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; padding: 8px 10px; border-radius: 8px; background: var(--g5); font-size: 12px; overflow: hidden; }
+.mini-map span.on { background: var(--ink); color: var(--on-ink); }
+.mini-map b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-map small { font: 11px var(--mono); opacity: .7; }
+
+.mini-group { padding: 14px; border-radius: 16px; background: var(--bg); font-size: 13px; }
+.mini-group-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.mini-group-head b { font-weight: 600; }
+.mini-group-head span { color: var(--muted); font-size: 12px; }
+.mini-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mini-group li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 10px; background: var(--paper); }
+.mini-group code { background: none; padding: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-group li span { font: 12px var(--mono); color: var(--muted); }
+
+.mini-history { flex: 1; display: flex; align-items: stretch; gap: 8px; min-height: 150px; border-bottom: 1px dashed var(--line-strong); }
+.mini-history span { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
+.mini-history small { font: 10.5px var(--mono); color: var(--faint); white-space: nowrap; }
+.mini-history i { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(var(--g4), color-mix(in srgb, var(--g4) 45%, transparent)); border-top: 2px solid var(--g2); }
+.mini-history span.on i { background: var(--ink); border-top-color: var(--ink); }
+.mini-history span.on small { color: var(--text); font-weight: 600; }
+
+.mini-types ul.wrap { flex-wrap: wrap; row-gap: 6px; }
+
+.mini-note { display: flex; gap: 12px; padding: 14px; border-radius: 16px; background: color-mix(in srgb, var(--bg) 90%, transparent); box-shadow: var(--shadow-md); font-size: 13px; }
+.mini-note > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.mini-note b { font-weight: 600; }
+.mini-note small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.mini-note-icon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--ink); color: var(--on-ink); }
+
+.mini-cli { margin: 0; padding: 14px 16px; border-radius: 14px; background: #0e110f; color: #e6ebe7; font: 11.5px/1.6 var(--mono); overflow-x: auto; }
+.mini-cli .p { color: #8d958f; }
+.mini-cli .c { color: #8d958f; }
+
+.more-link { margin-top: 24px; }
+
+/* ---- Features page ---- */
+.features-intro { padding-top: clamp(40px, 8vw, 88px); }
+.features-intro h1 { font-size: clamp(44px, 7vw, 84px); font-weight: 800; letter-spacing: -0.05em; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; }
+.chips a { padding: 8px 14px; border-radius: 999px; background: var(--paper); font-size: 14.5px; font-weight: 500; }
+.chips a:hover { background: var(--sage); }
+.feature-group { padding-top: clamp(64px, 9vw, 104px); scroll-margin-top: 40px; }
+.feature-group .section-head { margin-bottom: 28px; }
+.feature-group .section-head h2 { font-size: clamp(30px, 4vw, 44px); }
+.feature-group .card { scroll-margin-top: 96px; }
+.card-plain { min-height: 0; justify-content: flex-start; }
+
 /* ---- Steps ---- */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .step { padding: 28px; border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--line); }

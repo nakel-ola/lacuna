@@ -74,6 +74,59 @@ const PATHS = {
       <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
     </>
   ),
+  spark: <path d="M12 3.5 13.9 10l6.6 2-6.6 2L12 20.5 10.1 14l-6.6-2 6.6-2z" />,
+  history: (
+    <>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+      <path d="M3.5 4v4.5H8" />
+      <path d="M12 8v4.5l3 2" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  map: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
+      <path d="M12 3.5v17M12 13h8.5M3.5 10H12" />
+    </>
+  ),
+  branch: (
+    <>
+      <circle cx="6.5" cy="5.5" r="2" />
+      <circle cx="6.5" cy="18.5" r="2" />
+      <circle cx="17.5" cy="8" r="2" />
+      <path d="M6.5 7.5v9M17.5 10c0 4-5 3.5-9.5 7" />
+    </>
+  ),
+  terminal: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="m7 10 3 2.5L7 15M12.5 15H17" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+  download: <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />,
+  badge: (
+    <>
+      <path d="M12 3 19.5 6v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </>
+  ),
+  key: (
+    <>
+      <rect x="3" y="6.5" width="18" height="11" rx="2.5" />
+      <path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

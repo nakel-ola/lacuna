@@ -7,7 +7,7 @@ export const SITE = {
   title: 'Lacuna: free, open-source disk space analyzer for Mac',
   description:
     'Lacuna is a free, open-source disk space analyzer for Mac. Scan millions of files in seconds, see where your storage went, and clear it safely.',
-  version: '0.1.0',
+  version: '0.3.0',
   minimumMacOS: '10.15',
 };
 
@@ -21,6 +21,9 @@ export const VIDEO = {
 };
 
 export const AUTHOR = { name: 'Olamilekan Nunu', url: 'https://github.com/nakel-ola' };
+
+/** Everything the app does, grouped. */
+export const FEATURES_URL = '/features/';
 
 /** Our own download page: starts the download and shows install steps. */
 export const DOWNLOAD_URL = '/download/';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FAQ, STATS, STEPS } from '../content';
-import { DOWNLOAD_URL, SITE, VIDEO } from '../site';
+import { DOWNLOAD_URL, FEATURES_URL, SITE, VIDEO } from '../site';
 import { Icon, Logo } from './Icon';
 
 export function Nav() {
@@ -14,7 +14,7 @@ export function Nav() {
         <nav aria-label="Main">
           <ul className="nav-links">
             <li>
-              <a href="/#features">Features</a>
+              <a href={FEATURES_URL}>Features</a>
             </li>
             <li>
               <a href="/#how-it-works">How it works</a>
@@ -124,8 +124,8 @@ export function OpenSource() {
           <p className="eyebrow">Open source</p>
           <h2 id="oss-title">Built in the open. Yours to read, fork and improve.</h2>
           <p>
-            Lacuna is MIT licensed. The scanner is Rust, the interface is React and TypeScript, and the app is a 6.6 MB
-            Tauri bundle. No black boxes: you can read exactly what it does with your files.
+            Lacuna is MIT licensed. The scanner is Rust, the interface is React and TypeScript, and the app is a 7 MB
+            Tauri download. No black boxes: you can read exactly what it does with your files.
           </p>
           <ul className="checks">
             <li>
@@ -174,7 +174,7 @@ export function OpenSource() {
                 </span>
               ))}
               {'\n'}
-              <span className="ok">✓</span> Lacuna.app <span className="c">(6.6 MB)</span>
+              <span className="ok">✓</span> Lacuna.app
             </code>
           </pre>
         </div>
@@ -244,6 +244,9 @@ export function Footer({ cta = true }: { cta?: boolean }) {
             </a>
           </p>
           <ul>
+            <li>
+              <a href={FEATURES_URL}>Features</a>
+            </li>
             <li>
               <a href="/guides/free-up-space-on-mac/">Free up space on a Mac</a>
             </li>

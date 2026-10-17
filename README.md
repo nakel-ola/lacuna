@@ -34,7 +34,7 @@ https://github.com/user-attachments/assets/20a685ae-25af-4c58-ac7e-b9baf2ba31dc
 - **Safe.** Nothing is deleted outright. Files go to the Trash, and you see the exact paths and total before you confirm.
 - **Honest.** Suggestions say *why* something is safe to remove, duplicates are matched byte for byte, and space it can't see is explained, not hidden.
 - **Private.** No network access, no accounts and no telemetry. Your file list never leaves your Mac.
-- **Small.** A 6.6 MB app with a native window, light and dark themes, and a custom title bar.
+- **Small.** A 7 MB download with a native window, light and dark themes, and a custom title bar.
 
 ## Features
 

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { App, ROUTES, type Route } from './App';
+import { FEATURE_LIST } from './components/FeaturesPage';
 import { FAQ } from './content';
 import { AUTHOR, DOWNLOAD_URL, SITE, VIDEO } from './site';
 
@@ -20,6 +21,11 @@ const json = (value: object) => JSON.stringify(value).replace(/</g, '\\u003c');
 
 const PAGES: Record<Route, { title: string; description: string }> = {
   '/': { title: SITE.title, description: SITE.description },
+  '/features/': {
+    title: 'Lacuna features: find, understand and clear disk space on Mac',
+    description:
+      'Everything Lacuna does: space by folder and treemap, cleanup suggestions, duplicates, untouched files, git worktrees, scan history, hidden space, menu bar alerts and a command line.',
+  },
   '/download/': {
     title: 'Download Lacuna for Mac',
     description:
@@ -64,6 +70,7 @@ export function renderHead(route: Route): string {
         applicationCategory: 'UtilitiesApplication',
         operatingSystem: `macOS ${SITE.minimumMacOS} or later`,
         softwareVersion: SITE.version,
+        featureList: FEATURE_LIST,
         downloadUrl: new URL(DOWNLOAD_URL, SITE.url).href,
         license: 'https://opensource.org/licenses/MIT',
         isAccessibleForFree: true,
@@ -88,6 +95,16 @@ export function renderHead(route: Route): string {
         mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
       },
     );
+  }
+  if (route === '/features/') {
+    schema.push({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: SITE.name, item: home },
+        { '@type': 'ListItem', position: 2, name: 'Features', item: canonical },
+      ],
+    });
   }
   if (route === '/guides/free-up-space-on-mac/') {
     schema.push(

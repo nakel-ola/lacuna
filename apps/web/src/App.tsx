@@ -1,11 +1,12 @@
 import { DownloadPage } from './components/DownloadPage';
 import { Features } from './components/Features';
+import { FeaturesPage } from './components/FeaturesPage';
 import { GuidePage } from './components/GuidePage';
 import { Hero } from './components/Hero';
 import { Demo, Faq, Footer, Nav, OpenSource, Stats, Steps } from './components/Sections';
 
 /** Every page the site has; scripts/prerender.mjs writes one HTML file for each. */
-export const ROUTES = ['/', '/download/', '/guides/free-up-space-on-mac/'] as const;
+export const ROUTES = ['/', '/features/', '/download/', '/guides/free-up-space-on-mac/'] as const;
 export type Route = (typeof ROUTES)[number];
 
 export const routeFor = (pathname: string): Route => {
@@ -23,6 +24,8 @@ export function App({ route }: { route: Route }) {
       <main id="main">
         {route === '/download/' ? (
           <DownloadPage />
+        ) : route === '/features/' ? (
+          <FeaturesPage />
         ) : route === '/guides/free-up-space-on-mac/' ? (
           <GuidePage />
         ) : (
