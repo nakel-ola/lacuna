@@ -71,8 +71,7 @@ Get the latest version from **[lacuna.nakel.app/download](https://lacuna.nakel.a
 [GitHub Releases](https://github.com/nakel-ola/lacuna/releases/latest). It's one app for Apple silicon and Intel Macs.
 
 1. Open `Lacuna.dmg` and drag Lacuna to **Applications**.
-2. Lacuna isn't notarized by Apple yet, so the first launch needs one extra step. If macOS says it can't verify the
-   developer, open **System Settings → Privacy & Security** and click **Open Anyway**.
+2. Open it from Applications. Lacuna is signed and notarized by Apple, so it opens like any other app.
 
 ## Building from source
 
@@ -173,12 +172,12 @@ The landing page is static HTML. Set the production domain and repository URL in
 ## Roadmap
 
 - [x] Universal DMG releases built by GitHub Actions
-- [ ] Developer ID signing and notarization (needs an Apple Developer account)
+- [x] Developer ID signing and notarization
 - [ ] Privileged helper to scan folders even Full Disk Access can't read
 - [x] APFS snapshots and purgeable space
 - [x] Quick Look previews
 - [x] Suggestions, duplicates, untouched files, scan history, treemap, CSV export, CLI and menu bar
-- [ ] Homebrew cask (after notarization)
+- [ ] Homebrew cask
 - [ ] Windows and Linux (the scanner already falls back to `std::fs` off macOS)
 
 ## Releasing
@@ -186,12 +185,13 @@ The landing page is static HTML. Set the production domain and repository URL in
 Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` (and `Cargo.toml`), commit, then push a matching tag:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds a universal `Lacuna.app` and DMG and publishes the
 release. It also attaches a copy named `Lacuna.dmg`, which the website's download page always points to. Builds are
-ad-hoc signed until the Apple signing secrets listed at the top of the workflow are added to the repository.
+signed with a Developer ID and notarized using the repository secrets listed at the top of the workflow
+([`scripts/setup-signing.sh`](scripts/setup-signing.sh) sets them). Without those secrets they're ad-hoc signed.
 
 ## Contributing
 

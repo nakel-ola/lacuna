@@ -12,13 +12,8 @@ const INSTALL = [
     body: 'Drop the Lacuna icon onto the Applications folder in the window that opens, then eject the disk image.',
   },
   {
-    title: 'Open it the first time',
-    body: (
-      <>
-        Lacuna isn’t notarized by Apple yet, so macOS asks before the first launch. If it says it can’t verify the
-        developer, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. You only do this once.
-      </>
-    ),
+    title: 'Open it',
+    body: 'Double-click Lacuna in Applications. It’s signed and notarized by Apple, so it opens like any other app.',
   },
   {
     title: 'Optional: allow Full Disk Access',
