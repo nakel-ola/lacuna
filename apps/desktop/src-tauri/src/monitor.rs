@@ -3,7 +3,7 @@
 //!
 //! Settings live in the app's config folder as `settings.json`.
 
-use crate::{export, volumes};
+use crate::{cli, export, volumes};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -12,6 +12,7 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 
 const CHECK_EVERY: Duration = Duration::from_secs(60);
@@ -75,6 +76,31 @@ pub fn show_window(app: &AppHandle) {
     }
 }
 
+/// Links the `lacuna` command into the PATH, then says how it went. Runs off
+/// the main thread: the password prompt blocks until it's answered.
+fn install_cli(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let result = std::env::current_exe()
+            .and_then(|p| p.canonicalize())
+            .map_err(|e| e.to_string())
+            .and_then(|exe| cli::install_link(&exe));
+        let (kind, text) = match result {
+            Ok(cli::Install::Cancelled) => return,
+            Ok(cli::Install::AlreadyInstalled) => (
+                MessageDialogKind::Info,
+                format!("The lacuna command is already installed at {}.\n\nTry: lacuna scan ~", cli::LINK),
+            ),
+            Ok(cli::Install::Installed) => (
+                MessageDialogKind::Info,
+                format!("Installed at {}. Open a new terminal window and try:\n\nlacuna scan ~", cli::LINK),
+            ),
+            Err(e) => (MessageDialogKind::Error, format!("The lacuna command couldn't be installed.\n\n{e}")),
+        };
+        app.dialog().message(text).title("Command Line Tool").kind(kind).show(|_| {});
+    });
+}
+
 /// Builds the menu bar item and starts the free-space check.
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let settings = load(app);
@@ -92,6 +118,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
             &PredefinedMenuItem::separator(app)?,
             &keep,
             &alerts,
+            &MenuItem::with_id(app, "cli", "Install Command Line Tool…", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", "Quit Lacuna", true, None::<&str>)?,
         ],
@@ -118,6 +145,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     s.low_space_alerts = alerts.is_checked().unwrap_or(s.low_space_alerts);
                     save(app, *s);
                 }
+                "cli" => install_cli(app),
                 "quit" => app.exit(0),
                 _ => {}
             }

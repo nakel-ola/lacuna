@@ -201,8 +201,8 @@ const GROUPS: Group[] = [
         title: 'Command line',
         body: (
           <>
-            <code>lacuna scan</code> prints the biggest folders in your terminal, or as JSON for scripts. It only reads;
-            it never deletes.
+            <code>lacuna scan</code> prints the biggest folders in your terminal, or as JSON for scripts. Add it from the
+            menu bar with <b>Install Command Line Tool…</b>. It only reads; it never deletes.
           </>
         ),
         mini: <MiniCli />,

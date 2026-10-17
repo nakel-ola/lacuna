@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/20a685ae-25af-4c58-ac7e-b9baf2ba31dc
 | **Search** | Find any file or folder by name across the whole scan, largest first (<kbd>⌘</kbd><kbd>F</kbd>). |
 | **Cleanup** | Press <kbd>+</kbd> on any row, or drag rows onto the Cleanup card, then review and move them to the Trash. Views update without a rescan. |
 | **Export** | Save the current folder to CSV: every item of 1 MB or more, with size, file count and last-used date. |
-| **Menu bar** | Free space on the startup disk at a glance, a notification when it runs low, and an option to keep Lacuna in the menu bar when the window is closed. |
+| **Menu bar** | Free space on the startup disk at a glance, a notification when it runs low, an option to keep Lacuna in the menu bar when the window is closed, and **Install Command Line Tool…**. |
 
 ### Keyboard shortcuts
 
@@ -89,10 +89,12 @@ pnpm test     # Rust unit tests
 
 ### Command line
 
-The app doubles as a command-line tool. Link it onto your `PATH` once:
+The app doubles as a command-line tool. To add the `lacuna` command to your terminal, click the Lacuna icon in the
+menu bar and choose **Install Command Line Tool…**. macOS asks for your password, since the command goes in
+`/usr/local/bin`. Or do it by hand:
 
 ```bash
-ln -s /Applications/Lacuna.app/Contents/MacOS/lacuna /usr/local/bin/lacuna
+sudo ln -sf /Applications/Lacuna.app/Contents/MacOS/lacuna /usr/local/bin/lacuna
 ```
 
 ```bash

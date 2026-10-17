@@ -1,13 +1,14 @@
 //! `lacuna scan <folder>`: the scanner from a terminal, without the window.
 //!
-//! Link it onto your PATH with:
-//!   ln -s /Applications/Lacuna.app/Contents/MacOS/lacuna /usr/local/bin/lacuna
+//! "Install Command Line Tool…" in the menu bar item links it onto the PATH
+//! (`install_link`), or by hand:
+//!   sudo ln -s /Applications/Lacuna.app/Contents/MacOS/lacuna /usr/local/bin/lacuna
 
 use crate::export;
 use crate::insights;
 use crate::scanner::{Kind, Scanner, ROOT};
 use serde_json::json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 const USAGE: &str = "\
@@ -144,6 +145,75 @@ fn scan(o: Opts) -> i32 {
     0
 }
 
+/// Where the menu bar's "Install Command Line Tool…" puts the `lacuna` command.
+/// macOS has `/usr/local/bin` on every shell's PATH.
+pub const LINK: &str = "/usr/local/bin/lacuna";
+
+#[derive(Debug, PartialEq)]
+pub enum Install {
+    Installed,
+    AlreadyInstalled,
+    Cancelled,
+}
+
+#[derive(Debug, PartialEq)]
+enum Plan {
+    Done,
+    /// Create the link, replacing one that points at an older copy of Lacuna.
+    Link,
+}
+
+fn plan(link: &Path, exe: &Path) -> Result<Plan, String> {
+    let exe_text = exe.to_string_lossy();
+    if exe_text.contains("/AppTranslocation/") || exe_text.starts_with("/Volumes/") {
+        return Err("Move Lacuna to your Applications folder first, then try again.".into());
+    }
+    match std::fs::symlink_metadata(link) {
+        Ok(m) if m.file_type().is_symlink() => {
+            Ok(if std::fs::read_link(link).is_ok_and(|t| t == exe) { Plan::Done } else { Plan::Link })
+        }
+        Ok(_) => Err(format!("{} already exists and isn't from Lacuna, so it was left alone.", link.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Plan::Link),
+        Err(e) => Err(format!("Can't check {}: {e}", link.display())),
+    }
+}
+
+/// Links `LINK` to this app's binary. Tries directly first, then asks for an
+/// administrator password the standard macOS way, since `/usr/local/bin`
+/// usually belongs to root.
+pub fn install_link(exe: &Path) -> Result<Install, String> {
+    let link = Path::new(LINK);
+    if plan(link, exe)? == Plan::Done {
+        return Ok(Install::AlreadyInstalled);
+    }
+    let direct = std::fs::remove_file(link)
+        .or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) })
+        .and_then(|_| std::os::unix::fs::symlink(exe, link));
+    if direct.is_ok() {
+        return Ok(Install::Installed);
+    }
+    let out = std::process::Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            "on run argv",
+            "-e",
+            "do shell script \"mkdir -p /usr/local/bin && ln -sfn \" & quoted form of (item 1 of argv) & \" \" & quoted form of (item 2 of argv) with prompt \"Lacuna wants to add the lacuna command to your terminal.\" with administrator privileges",
+            "-e",
+            "end run",
+        ])
+        .arg(exe)
+        .arg(link)
+        .output()
+        .map_err(|e| format!("Couldn't ask for permission: {e}"))?;
+    if out.status.success() {
+        Ok(Install::Installed)
+    } else if String::from_utf8_lossy(&out.stderr).contains("-128") {
+        Ok(Install::Cancelled)
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +231,22 @@ mod tests {
         assert!(parse(&args("scan /a /b")).is_err());
         assert!(parse(&args("scan /a --nope")).is_err());
         assert!(parse(&args("erase /")).is_err());
+    }
+
+    #[test]
+    fn install_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = Path::new("/Applications/Lacuna.app/Contents/MacOS/lacuna");
+        let link = dir.path().join("lacuna");
+        assert_eq!(plan(&link, exe), Ok(Plan::Link));
+        std::os::unix::fs::symlink("/Users/me/Downloads/Lacuna.app/Contents/MacOS/lacuna", &link).unwrap();
+        assert_eq!(plan(&link, exe), Ok(Plan::Link), "points at an old copy");
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(exe, &link).unwrap();
+        assert_eq!(plan(&link, exe), Ok(Plan::Done));
+        std::fs::remove_file(&link).unwrap();
+        std::fs::write(&link, b"someone else's tool").unwrap();
+        assert!(plan(&link, exe).is_err());
+        assert!(plan(&dir.path().join("x"), Path::new("/Volumes/Lacuna/Lacuna.app/Contents/MacOS/lacuna")).is_err());
     }
 }
